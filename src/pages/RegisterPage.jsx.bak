@@ -1,0 +1,184 @@
+import { useState } from 'react'
+import { useFormik } from 'formik'
+import * as Yup from 'yup'
+import { Link, useNavigate } from 'react-router-dom'
+import { register } from '../api/authApi'
+import AuthBrandMark from '../components/AuthBrandMark'
+import PasswordField from '../components/PasswordField'
+
+// Trang RegisterPage
+// Muc dich:
+// - Tao tai khoan moi cho nguoi dung.
+// - Validate thong tin truoc khi gui len backend.
+// Lien ket backend:
+// - POST /api/auth/register (AuthController.Register).
+
+// Validate form dang ky (bao gom rule password manh).
+const validationSchema = Yup.object({
+  fullName: Yup.string().required('Vui lòng nhập họ tên').min(2, 'Họ tên phải có ít nhất 2 ký tự'),
+  email: Yup.string().email('Email không hợp lệ'),
+  phone: Yup.string(),
+  password: Yup.string()
+    .required('Vui lòng nhập mật khẩu')
+    .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+    .matches(/[A-Z]/, 'Mật khẩu phải có ít nhất 1 chữ hoa')
+    .matches(/[^a-zA-Z0-9]/, 'Mật khẩu phải có ít nhất 1 ký tự đặc biệt'),
+  confirmPassword: Yup.string()
+    .oneOf([Yup.ref('password')], 'Mật khẩu xác nhận không khớp')
+    .required('Vui lòng xác nhận mật khẩu'),
+}).test('email-or-phone', 'Phải nhập email hoặc số điện thoại', function(values) {
+  if (!values.email && !values.phone) {
+    return this.createError({ path: 'email', message: 'Phải nhập email hoặc số điện thoại' })
+  }
+  return true
+})
+
+export default function RegisterPage() {
+  const navigate = useNavigate()
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const formik = useFormik({
+    initialValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+    },
+    validationSchema,
+    onSubmit: async (values) => {
+      // Goi API register.
+      // Neu thanh cong se dieu huong sang trang login.
+      setError('')
+      setLoading(true)
+      try {
+        await register({
+          fullName: values.fullName,
+          email: values.email || null,
+          phone: values.phone || null,
+          password: values.password,
+        })
+        navigate('/login', { state: { message: 'Đăng ký thành công! Vui lòng đăng nhập.' } })
+      } catch (err) {
+        setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.')
+      } finally {
+        setLoading(false)
+      }
+    },
+  })
+
+  // UI trang dang ky.
+  return (
+    <div className="auth-wrapper auth-wrapper-fixed auth-wrapper-register">
+      <div className="auth-container auth-container-wide auth-container-register">
+        <div className="auth-card auth-card-wide auth-card-register">
+          <div className="auth-header">
+            <AuthBrandMark />
+            <h1>Đăng Ký</h1>
+            <p className="auth-subtitle">Tạo tài khoản mới trên RentalPlatform</p>
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+
+          <form onSubmit={formik.handleSubmit} className="auth-form auth-form-register">
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="fullName">Họ tên</label>
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  placeholder="Nguyễn Văn A"
+                  value={formik.values.fullName}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  className={formik.touched.fullName && formik.errors.fullName ? 'input-error' : ''}
+                />
+                {formik.touched.fullName && formik.errors.fullName && (
+                  <span className="field-error">{formik.errors.fullName}</span>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="phone">Số điện thoại</label>
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  placeholder="0901234567"
+                  value={formik.values.phone}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  className={formik.touched.phone && formik.errors.phone ? 'input-error' : ''}
+                />
+                {formik.touched.phone && formik.errors.phone && (
+                  <span className="field-error">{formik.errors.phone}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="example@email.com"
+                value={formik.values.email}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={formik.touched.email && formik.errors.email ? 'input-error' : ''}
+              />
+              {formik.touched.email && formik.errors.email && (
+                <span className="field-error">{formik.errors.email}</span>
+              )}
+            </div>
+
+            <div className="form-row form-row-password">
+              <PasswordField
+                id="password"
+                name="password"
+                label="Mật khẩu"
+                autoComplete="new-password"
+                placeholder="Ít nhất 8 ký tự"
+                value={formik.values.password}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                touched={formik.touched.password}
+                error={formik.errors.password}
+              />
+
+              <PasswordField
+                id="confirmPassword"
+                name="confirmPassword"
+                label="Xác nhận mật khẩu"
+                autoComplete="new-password"
+                placeholder="Nhập lại mật khẩu"
+                value={formik.values.confirmPassword}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                touched={formik.touched.confirmPassword}
+                error={formik.errors.confirmPassword}
+              />
+            </div>
+
+            <button type="submit" className="auth-btn" disabled={loading}>
+              {loading ? (
+                <span className="btn-loading">
+                  <span className="spinner"></span> Đang xử lý...
+                </span>
+              ) : (
+                'Đăng Ký'
+              )}
+            </button>
+          </form>
+
+          <div className="auth-footer">
+            <p>Đã có tài khoản? <Link to="/login">Đăng nhập</Link></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

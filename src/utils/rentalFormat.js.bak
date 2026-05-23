@@ -1,0 +1,55 @@
+// rentalFormat.js gom cac helper "presentation only".
+// Muc tieu la tach format tien, ngay, status ra khoi page/component
+// de UI de doc hon va tranh lap lai logic hien thi.
+const genderMap = {
+  all: 'Tất cả',
+  male: 'Nam',
+  female: 'Nữ',
+}
+
+export function formatCurrency(value) {
+  // Frontend luon giu raw number, chi format o luc render.
+  return Number(value || 0).toLocaleString('vi-VN')
+}
+
+export function formatDate(value) {
+  // Dung cho hop dong, booking, profile...
+  if (!value) return '---'
+  return new Date(value).toLocaleDateString('vi-VN')
+}
+
+export function formatDateTime(value) {
+  // Dung cho notifications, messages, payments va dashboard.
+  if (!value) return '---'
+  return new Date(value).toLocaleString('vi-VN')
+}
+
+export function formatGenderAllowed(value) {
+  return genderMap[String(value || '').toLowerCase()] || value || '---'
+}
+
+export function getRoomThumbnail(room) {
+  // RoomCard va RoomDetailPage uu tien anh thumbnail neu co.
+  if (!room?.images?.length) return ''
+
+  const thumbnail = room.images.find((item) => item.isThumbnail)
+  return thumbnail?.imageUrl || room.images[0]?.imageUrl || ''
+}
+
+export function formatRoomStatusLabel(value) {
+  // Quy doi status ky thuat tu backend thanh nhan de doc cho nguoi dung.
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'available') return 'Còn trống'
+  if (normalized === 'reserved') return 'Đã giữ chỗ'
+  if (normalized === 'rented') return 'Đã thuê'
+  if (normalized === 'hidden') return 'Đang ẩn'
+  return value || '---'
+}
+
+export function formatContractStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'awaiting_signatures') return 'Chờ đủ chữ ký'
+  if (normalized === 'signed') return 'Đã ký đủ'
+  if (normalized === 'canceled') return 'Đã hủy'
+  return value || '---'
+}

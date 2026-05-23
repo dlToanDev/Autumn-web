@@ -1,0 +1,263 @@
+// Trang AdminAnnouncementsPage cho admin soan "bai thong bao dac biet".
+// Muc dich:
+// - Chon nhom nguoi nhan (ALL/USER/LANDLORD/ADMIN)
+// - Tao ban ghi announcement
+// - Backend dong thoi sinh notification cho tung nguoi nhan phu hop
+// - Cho admin xem lich su cac bai da gui
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import { createAdminAnnouncement, getAdminAnnouncements } from '../api/adminApi'
+import { emitNotificationsChanged } from '../utils/notificationEvents'
+import { formatDateTime } from '../utils/rentalFormat'
+
+const defaultForm = {
+  targetRole: 'ALL',
+  title: '',
+  content: '',
+}
+
+function formatTargetRoleLabel(value) {
+  // Quy doi ma role ky thuat thanh text giao dien de admin de chon/de doc.
+  const normalized = String(value || '').toUpperCase()
+  if (normalized === 'ALL') return 'Toàn hệ thống'
+  if (normalized === 'USER') return 'Người thuê'
+  if (normalized === 'LANDLORD') return 'Chủ trọ'
+  if (normalized === 'ADMIN') return 'Admin'
+  return value || 'Khác'
+}
+
+function getTargetRoleClass(value) {
+  // CSS dung class nay de phan biet mau theo nhom nguoi nhan.
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'user') return 'user'
+  if (normalized === 'landlord') return 'landlord'
+  if (normalized === 'admin') return 'admin'
+  return 'all'
+}
+
+export default function AdminAnnouncementsPage() {
+  const [form, setForm] = useState(defaultForm)
+  const [announcements, setAnnouncements] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  // Load lich su announcement tu backend de admin co the doi chieu bai da gui.
+  const loadAnnouncements = async () => {
+    const data = await getAdminAnnouncements()
+    const nextAnnouncements = Array.isArray(data)
+      ? [...data].sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      : []
+
+    setAnnouncements(nextAnnouncements)
+    return nextAnnouncements
+  }
+
+  useEffect(() => {
+    // Tai lan dau khi vao route /admin/announcements.
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await loadAnnouncements()
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách bài thông báo.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  // stats chi la tong hop client-side phuc vu summary card.
+  const stats = useMemo(() => ({
+    total: announcements.length,
+    recipients: announcements.reduce((total, item) => total + Number(item.recipientCount || 0), 0),
+    latest: announcements[0]?.createdAt || '',
+  }), [announcements])
+
+  const handleChange = (field, value) => {
+    // Form nho nen dung update field truc tiep thay vi Formik.
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async (event) => {
+    // createAdminAnnouncement se vua tao announcement vua phat notification xuong user.
+    event.preventDefault()
+    setSubmitting(true)
+    setMessage('')
+    setError('')
+
+    try {
+      const createdAnnouncement = await createAdminAnnouncement(form)
+      setAnnouncements((prev) => [createdAnnouncement, ...prev])
+      setForm(defaultForm)
+      // Header/NotificationsPage nghe event nay de refresh badge va danh sach.
+      emitNotificationsChanged()
+      setMessage(`Đã gửi bài thông báo tới ${createdAnnouncement.recipientCount} người nhận.`)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể gửi bài thông báo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải trang bài thông báo...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang tạo thông báo của hệ thống"
+          description={[
+            'Bạn có thể soạn thông báo, chọn nhóm người nhận và theo dõi lịch sử các bài đã gửi.',
+            'Nếu cần phản hồi thêm sau khi gửi, hãy mở hộp tin để trao đổi ngay.',
+          ]}
+          action={{ to: '/messages', label: 'Mở hộp tin' }}
+        />
+
+        <div className="inline-actions">
+          <Link to="/admin" className="ghost-button card-link-button">
+            Về dashboard
+          </Link>
+          <Link to="/notifications" className="primary-button card-link-button">
+            Xem trang thông báo
+          </Link>
+        </div>
+
+        <div className="detail-summary-grid">
+          <div className="detail-summary-item">
+            <span>Tổng bài đã gửi</span>
+            <strong>{stats.total}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Tổng lượt nhận</span>
+            <strong>{stats.recipients}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Bài gần nhất</span>
+            <strong>{stats.latest ? formatDateTime(stats.latest) : '---'}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Loại gửi mặc định</span>
+            <strong>{formatTargetRoleLabel(form.targetRole)}</strong>
+          </div>
+        </div>
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="dashboard-panel contract-form-shell section-top-gap">
+          <div className="panel-heading">
+            <div>
+              <h2>Soạn bài thông báo</h2>
+              <p>Dùng cho các bài đặc biệt như thay đổi chính sách, cảnh báo hệ thống hoặc chương trình nổi bật.</p>
+            </div>
+          </div>
+
+          <form className="dashboard-form admin-announcement-form" onSubmit={handleSubmit}>
+            <div className="form-grid two-cols">
+              <label className="form-field">
+                <span>Đối tượng nhận</span>
+                <select value={form.targetRole} onChange={(event) => handleChange('targetRole', event.target.value)}>
+                  <option value="ALL">Toàn hệ thống</option>
+                  <option value="USER">Người thuê</option>
+                  <option value="LANDLORD">Chủ trọ</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </label>
+
+              <div className="detail-disabled-box announcement-preview-box">
+                <strong>Nhóm nhận hiện tại</strong>
+                <p>{formatTargetRoleLabel(form.targetRole)}</p>
+              </div>
+            </div>
+
+            <label className="form-field">
+              <span>Tiêu đề</span>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(event) => handleChange('title', event.target.value)}
+                placeholder="Ví dụ: Thông báo bảo trì hệ thống tối nay"
+                maxLength={255}
+              />
+            </label>
+
+            <label className="form-field">
+              <span>Nội dung</span>
+              <textarea
+                value={form.content}
+                onChange={(event) => handleChange('content', event.target.value)}
+                placeholder="Nhập nội dung bài thông báo đặc biệt..."
+                rows={8}
+              />
+            </label>
+
+            <div className="inline-actions">
+              <button type="submit" className="primary-button" disabled={submitting}>
+                {submitting ? 'Đang gửi thông báo...' : 'Gửi bài thông báo'}
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setForm(defaultForm)}
+                disabled={submitting}
+              >
+                Làm mới nội dung
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="dashboard-panel section-top-gap">
+          <div className="panel-heading">
+            <div>
+              <h2>Lịch sử bài đã gửi</h2>
+              <p>Xem lại các bài thông báo đặc biệt mà admin đã phát đi cho hệ thống.</p>
+            </div>
+          </div>
+
+          {announcements.length === 0 ? (
+            <div className="dashboard-empty">Admin chưa gửi bài thông báo nào.</div>
+          ) : (
+            <div className="stack-list announcement-history-list">
+              {announcements.map((item) => (
+                <article key={item.id} className="stack-card announcement-history-card">
+                  <div className="announcement-history-head">
+                    <div>
+                      <div className="inline-actions announcement-history-meta">
+                        <span className={`mini-tag announcement-target-pill ${getTargetRoleClass(item.targetRole)}`}>
+                          {formatTargetRoleLabel(item.targetRole)}
+                        </span>
+                        <span className="mini-tag">{item.recipientCount} người nhận</span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <p className="stack-note">
+                        Gửi bởi {item.createdByName} lúc {formatDateTime(item.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="announcement-history-content">{item.content}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  )
+}

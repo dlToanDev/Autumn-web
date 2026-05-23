@@ -1,0 +1,555 @@
+// Trang BecomeLandlordPage la luong user xin len vai tro landlord.
+// Muc dich:
+// - Nop ho so xac minh
+// - Tao/quan ly payment phi dang ky
+// - Theo doi ket qua duyet tu admin
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getMe } from '../api/authApi'
+import {
+  createLandlordRegistrationFeePayment,
+  getMyLandlordApplication,
+  submitLandlordApplication,
+} from '../api/landlordApplicationApi'
+import { getPaymentByCode } from '../api/paymentApi'
+import PaymentQrModal from '../components/PaymentQrModal'
+import { formatCurrency, formatDateTime } from '../utils/rentalFormat'
+
+const initialForm = {
+  cccdNumber: '',
+  cccdFrontUrl: '',
+  cccdBackUrl: '',
+  rentalDocumentUrls: [],
+  rentalDocumentUrlInput: '',
+  note: '',
+}
+
+async function fileToDataUrl(file) {
+  // Page nay co helper rieng vi can xu ly nhieu file upload trong mot form.
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+    reader.onerror = () => reject(new Error('Không thể đọc file.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function FileUploadField({ label, name, value, onFileChange, onManualChange, accept, hint }) {
+  // Component con de tai su dung giao dien upload cho nhieu truong tai lieu.
+  const isMultiple = name === 'rentalDocumentUrls'
+  return (
+    <div className="form-group">
+      <label htmlFor={name}>{label}</label>
+      <input
+        id={name}
+        name={name}
+        type="file"
+        accept={accept}
+        multiple={isMultiple}
+        onChange={(event) => onFileChange(name, event)}
+      />
+      <input
+        name={name}
+        value={value}
+        onChange={onManualChange}
+        placeholder="Dán URL ảnh hoặc PDF"
+      />
+      {hint && <small className="field-hint">{hint}</small>}
+      {value && (
+        <a className="doc-link" href={value} target="_blank" rel="noreferrer">
+          Xem tài liệu đã chọn
+        </a>
+      )}
+    </div>
+  )
+}
+
+function formatApplicationStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đang chờ admin duyệt'
+  if (normalized === 'approved') return 'Đã duyệt thành công'
+  if (normalized === 'rejected') return 'Đã bị từ chối'
+  return 'Chưa nộp hồ sơ'
+}
+
+function formatFeeStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đã tạo QR, chờ chuyển khoản'
+  if (normalized === 'waiting_confirm') return 'Đã gửi minh chứng, chờ admin xác nhận'
+  if (normalized === 'success') return 'Đã xác nhận đóng phí'
+  if (normalized === 'expired') return 'QR đã hết hạn'
+  if (normalized === 'canceled') return 'Đã hủy'
+  return 'Chưa tạo thanh toán phí'
+}
+
+export default function BecomeLandlordPage() {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [creatingFee, setCreatingFee] = useState(false)
+  const [openingPayment, setOpeningPayment] = useState(false)
+  const [refreshingPayment, setRefreshingPayment] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [profile, setProfile] = useState(null)
+  const [application, setApplication] = useState(null)
+  const [payment, setPayment] = useState(null)
+  const [paymentError, setPaymentError] = useState('')
+  const [form, setForm] = useState(initialForm)
+
+  useEffect(() => {
+    // Kiem tra token va tai profile + application + payment lien quan neu da co.
+    const token = localStorage.getItem('token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    const loadData = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const me = await getMe()
+        setProfile(me)
+        localStorage.setItem('user', JSON.stringify(me))
+
+        if ((me.roleCode || '').toUpperCase() === 'ADMIN') {
+          navigate('/admin/landlord-applications')
+          return
+        }
+
+        try {
+          const latest = await getMyLandlordApplication()
+          setApplication(latest)
+          setForm({
+            cccdNumber: latest.cccdNumber ?? '',
+            cccdFrontUrl: latest.cccdFrontUrl ?? '',
+            cccdBackUrl: latest.cccdBackUrl ?? '',
+            rentalDocumentUrls: latest.rentalDocumentUrls ?? [],
+            rentalDocumentUrlInput: '',
+            note: latest.note ?? '',
+          })
+        } catch (appErr) {
+          if (appErr.response?.status !== 404) {
+            throw appErr
+          }
+
+          setApplication(null)
+          setPayment(null)
+        }
+      } catch (err) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        setError(err.response?.data?.message || 'Không thể tải dữ liệu hồ sơ chủ trọ.')
+        navigate('/login')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [navigate])
+
+  const applicationStatusLabel = useMemo(() => formatApplicationStatusLabel(application?.status), [application?.status])
+  const feeStatusLabel = useMemo(() => formatFeeStatusLabel(application?.registrationFeePaymentStatus), [application?.registrationFeePaymentStatus])
+  const feeStatus = String(application?.registrationFeePaymentStatus || '').toLowerCase()
+  const feeAmount = Number(application?.registrationFeeAmount || 2000000)
+  const canManageFee = Boolean(application) && (profile?.roleCode || '').toUpperCase() !== 'LANDLORD'
+
+  const syncApplicationPaymentFields = (updatedPayment) => {
+    setApplication((prev) => {
+      if (!prev) return prev
+
+      return {
+        ...prev,
+        registrationFeePaymentCode: updatedPayment?.paymentCode || '',
+        registrationFeePaymentStatus: updatedPayment?.status || '',
+        registrationFeePaidAt: updatedPayment?.paidAt || null,
+        registrationFeeExpiredAt: updatedPayment?.expiredAt || null,
+        registrationFeeProofImageUrl: updatedPayment?.transferProofImageUrl || '',
+        registrationFeeProofSubmittedAt: updatedPayment?.proofSubmittedAt || null,
+      }
+    })
+  }
+
+  const openPaymentByCode = async (paymentCode, showLoading = true) => {
+    if (!paymentCode) return
+
+    if (showLoading) setOpeningPayment(true)
+    setPaymentError('')
+
+    try {
+      const latestPayment = await getPaymentByCode(paymentCode)
+      setPayment(latestPayment)
+      syncApplicationPaymentFields(latestPayment)
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể tải payment phí đăng ký.')
+    } finally {
+      if (showLoading) setOpeningPayment(false)
+    }
+  }
+
+  const refreshSelectedPayment = async () => {
+    if (!payment?.paymentCode) return
+
+    setRefreshingPayment(true)
+    setPaymentError('')
+
+    try {
+      const latestPayment = await getPaymentByCode(payment.paymentCode)
+      setPayment(latestPayment)
+      syncApplicationPaymentFields(latestPayment)
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể cập nhật payment phí đăng ký.')
+    } finally {
+      setRefreshingPayment(false)
+    }
+  }
+
+  const onChange = (event) => {
+    const { name, value } = event.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const onFileChange = async (fieldName, event) => {
+    if (fieldName === 'rentalDocumentUrls') {
+      const files = Array.from(event.target.files ?? [])
+      if (files.length === 0) return
+
+      const invalidFile = files.find((file) => !(file.type.startsWith('image/') || file.type === 'application/pdf'))
+      if (invalidFile) {
+        setError('Chỉ chấp nhận file ảnh hoặc PDF.')
+        return
+      }
+
+      try {
+        const dataUrls = await Promise.all(files.map(fileToDataUrl))
+        setForm((prev) => ({
+          ...prev,
+          rentalDocumentUrls: [...prev.rentalDocumentUrls, ...dataUrls],
+        }))
+        setError('')
+      } catch (fileErr) {
+        setError(fileErr.message || 'Không thể xử lý file.')
+      }
+      return
+    }
+
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const validType = file.type.startsWith('image/') || file.type === 'application/pdf'
+    if (!validType) {
+      setError('Chỉ chấp nhận file ảnh hoặc PDF.')
+      return
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      setForm((prev) => ({ ...prev, [fieldName]: dataUrl }))
+      setError('')
+    } catch (fileErr) {
+      setError(fileErr.message || 'Không thể xử lý file.')
+    }
+  }
+
+  const handleCreateOrOpenFeePayment = async () => {
+    if (!application) {
+      setError('Bạn cần nộp hồ sơ chủ trọ trước khi tạo QR phí.')
+      return
+    }
+
+    if (application.registrationFeePaymentCode && feeStatus !== 'expired') {
+      await openPaymentByCode(application.registrationFeePaymentCode)
+      return
+    }
+
+    setCreatingFee(true)
+    setPaymentError('')
+    setError('')
+    setSuccess('')
+
+    try {
+      const createdPayment = await createLandlordRegistrationFeePayment()
+      setPayment(createdPayment)
+      syncApplicationPaymentFields(createdPayment)
+      setSuccess('Đã tạo QR phí đăng ký chủ trọ. Bạn hãy thanh toán và gửi minh chứng cho admin.')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tạo QR phí đăng ký chủ trọ.')
+    } finally {
+      setCreatingFee(false)
+    }
+  }
+
+  const onSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+    setSubmitting(true)
+
+    try {
+      const payload = {
+        cccdNumber: form.cccdNumber,
+        cccdFrontUrl: form.cccdFrontUrl,
+        cccdBackUrl: form.cccdBackUrl,
+        rentalDocumentUrls: form.rentalDocumentUrls,
+        note: form.note || null,
+      }
+
+      const result = await submitLandlordApplication(payload)
+      setApplication(result)
+      setSuccess('Đã lưu hồ sơ thành công. Tiếp theo bạn cần đóng phí đăng ký chủ trọ 2.000.000 đ để admin có thể xét duyệt.')
+
+      if (result.registrationFeePaymentCode) {
+        await openPaymentByCode(result.registrationFeePaymentCode, false)
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Nộp hồ sơ thất bại.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePaymentChanged = (updatedPayment) => {
+    setPayment(updatedPayment)
+    syncApplicationPaymentFields(updatedPayment)
+    setSuccess('Đã cập nhật thanh toán phí đăng ký chủ trọ.')
+  }
+
+  const handlePaymentDeleted = () => {
+    setPayment(null)
+    syncApplicationPaymentFields(null)
+    setSuccess('Đã xóa QR phí hết hạn. Bạn có thể tạo lại mã mới.')
+  }
+
+  if (loading) {
+    return (
+      <div className="auth-wrapper">
+        <div className="auth-container">
+          <div className="loading-screen">
+            <span className="spinner large"></span>
+            <p>Đang tải hồ sơ chủ trọ...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="profile-wrapper">
+      <div className="profile-container">
+        <div className="profile-card">
+          <div className="profile-header">
+            <h1>Đăng ký chủ trọ</h1>
+            <p>Nộp giấy tờ hợp lệ và hoàn tất phí đăng ký cố định 2.000.000 đ để admin xét duyệt hồ sơ.</p>
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+          {success && <div className="auth-success">{success}</div>}
+          {paymentError && <div className="auth-error">{paymentError}</div>}
+
+          <div className="status-box">
+            <div>
+              <strong>Trạng thái hồ sơ:</strong> {applicationStatusLabel}
+            </div>
+            <div>
+              <strong>Trạng thái phí đăng ký:</strong> {feeStatusLabel}
+            </div>
+            {application?.rejectReason && (
+              <div className="status-reject">
+                <strong>Lý do từ chối:</strong> {application.rejectReason}
+              </div>
+            )}
+            {application && (
+              <div className="status-meta">
+                <span>Nộp lúc: {formatDateTime(application.createdAt)}</span>
+                <span>Cập nhật: {formatDateTime(application.updatedAt)}</span>
+                <span>Duyệt lúc: {formatDateTime(application.reviewedAt)}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="detail-action-card">
+            <div className="panel-heading compact">
+              <div>
+                <h2>Phí đăng ký chủ trọ</h2>
+                <p>Khoản phí cố định áp dụng khi đăng ký làm chủ trọ. Admin chỉ duyệt hồ sơ sau khi xác nhận khoản phí này.</p>
+              </div>
+            </div>
+
+            <div className="detail-summary-grid">
+              <div className="detail-summary-item">
+                <span>Mức phí cố định</span>
+                <strong>{formatCurrency(feeAmount)} đ</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Mã payment</span>
+                <strong>{application?.registrationFeePaymentCode || 'Chưa tạo'}</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Trạng thái phí</span>
+                <strong>{feeStatusLabel}</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Đã xác nhận lúc</span>
+                <strong>{formatDateTime(application?.registrationFeePaidAt)}</strong>
+              </div>
+            </div>
+
+            {application?.registrationFeeProofSubmittedAt && (
+              <div className="review-form-hint">
+                Người dùng đã gửi minh chứng lúc {formatDateTime(application.registrationFeeProofSubmittedAt)}.
+              </div>
+            )}
+
+            <div className="inline-actions booking-modal-actions">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleCreateOrOpenFeePayment}
+                disabled={!canManageFee || creatingFee || openingPayment}
+              >
+                {!application
+                  ? 'Nộp hồ sơ trước để tạo QR'
+                  : application.registrationFeePaymentCode && feeStatus !== 'expired'
+                    ? 'Mở thanh toán phí'
+                    : 'Tạo QR phí đăng ký'}
+              </button>
+            </div>
+          </div>
+
+          {(profile?.roleCode || '').toUpperCase() === 'LANDLORD' ? (
+            <div className="auth-success">Tài khoản của bạn đã là chủ trọ. Bạn không cần nộp lại hồ sơ.</div>
+          ) : (
+            <form className="auth-form" onSubmit={onSubmit}>
+              <div className="form-group">
+                <label htmlFor="cccdNumber">Số CCCD</label>
+                <input
+                  id="cccdNumber"
+                  name="cccdNumber"
+                  value={form.cccdNumber}
+                  onChange={onChange}
+                  placeholder="Nhập số CCCD"
+                  required
+                />
+              </div>
+
+              <FileUploadField
+                label="CCCD mặt trước"
+                name="cccdFrontUrl"
+                value={form.cccdFrontUrl}
+                onFileChange={onFileChange}
+                onManualChange={onChange}
+                accept="image/*,.pdf"
+                hint="Chấp nhận ảnh hoặc PDF."
+              />
+
+              <FileUploadField
+                label="CCCD mặt sau"
+                name="cccdBackUrl"
+                value={form.cccdBackUrl}
+                onFileChange={onFileChange}
+                onManualChange={onChange}
+                accept="image/*,.pdf"
+                hint="Chấp nhận ảnh hoặc PDF."
+              />
+
+              <div className="form-group">
+                <label htmlFor="rentalDocumentUrls">Giấy tờ chứng minh quyền cho thuê</label>
+                <input
+                  id="rentalDocumentUrls"
+                  name="rentalDocumentUrls"
+                  type="file"
+                  accept="image/*,.pdf"
+                  multiple
+                  onChange={(event) => onFileChange('rentalDocumentUrls', event)}
+                />
+                <small className="field-hint">
+                  Có thể tải nhiều ảnh/PDF cùng lúc. Bạn cũng có thể dán URL tài liệu vào ô bên dưới rồi bấm thêm.
+                </small>
+
+                <div className="inline-actions">
+                  <input
+                    name="rentalDocumentUrlInput"
+                    value={form.rentalDocumentUrlInput}
+                    onChange={onChange}
+                    placeholder="Dán URL giấy tờ nhà trọ"
+                  />
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      const value = form.rentalDocumentUrlInput.trim()
+                      if (!value) return
+                      setForm((prev) => ({
+                        ...prev,
+                        rentalDocumentUrls: [...prev.rentalDocumentUrls, value],
+                        rentalDocumentUrlInput: '',
+                      }))
+                    }}
+                  >
+                    Thêm URL
+                  </button>
+                </div>
+
+                {form.rentalDocumentUrls.length > 0 && (
+                  <div className="doc-list">
+                    {form.rentalDocumentUrls.map((url, index) => (
+                      <div key={`${url.slice(0, 30)}-${index}`} className="doc-list-item">
+                        <span>Giấy tờ #{index + 1}</span>
+                        <div className="inline-actions">
+                          <a href={url} target="_blank" rel="noreferrer" className="doc-link">Xem</a>
+                          <button
+                            type="button"
+                            className="danger-btn mini"
+                            onClick={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                rentalDocumentUrls: prev.rentalDocumentUrls.filter((_, itemIndex) => itemIndex !== index),
+                              }))
+                            }}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="note">Ghi chú</label>
+                <textarea
+                  id="note"
+                  name="note"
+                  rows="4"
+                  value={form.note}
+                  onChange={onChange}
+                  placeholder="Bổ sung mô tả về nhà trọ hoặc giấy tờ (không bắt buộc)"
+                />
+              </div>
+
+              <button type="submit" className="auth-btn" disabled={submitting}>
+                {submitting ? 'Đang lưu hồ sơ...' : application ? 'Cập nhật hồ sơ chủ trọ' : 'Nộp hồ sơ chủ trọ'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {payment && (
+        <PaymentQrModal
+          payment={payment}
+          onClose={() => setPayment(null)}
+          onRefresh={refreshSelectedPayment}
+          refreshing={refreshingPayment}
+          error={paymentError}
+          onPaymentChanged={handlePaymentChanged}
+          onPaymentDeleted={handlePaymentDeleted}
+        />
+      )}
+    </div>
+  )
+}

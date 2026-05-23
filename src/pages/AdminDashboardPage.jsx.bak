@@ -1,0 +1,779 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell,
+} from 'recharts'
+import { getAdminDashboard } from '../api/adminApi'
+import { formatCurrency, formatDateTime } from '../utils/rentalFormat'
+
+const REVENUE_OPTIONS = [
+  { value: 'day', label: 'Ngày' },
+  { value: 'month', label: 'Tháng' },
+  { value: 'year', label: 'Năm' },
+]
+
+function formatRoleLabel(value) {
+  const normalized = String(value || '').toUpperCase()
+  if (normalized === 'ADMIN') return 'Admin'
+  if (normalized === 'LANDLORD') return 'Chủ trọ'
+  if (normalized === 'USER') return 'Người thuê'
+  return value || '---'
+}
+
+function formatRequestTypeLabel(value) {
+  return String(value || '').toLowerCase() === 'schedule_visit' ? 'Đặt lịch xem' : 'Thuê phòng'
+}
+
+function formatPaymentTypeLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'deposit') return 'Tiền cọc'
+  if (normalized === 'rent') return 'Tiền thuê'
+  if (normalized === 'service') return 'Phí dịch vụ'
+  if (normalized === 'listing_fee') return 'Hoa hồng'
+  return value || '---'
+}
+
+function getActivityTime(item) {
+  return new Date(item.time || 0).getTime()
+}
+
+export default function AdminDashboardPage() {
+  const [dashboard, setDashboard] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [revenueMode, setRevenueMode] = useState('month')
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const data = await getAdminDashboard()
+        setDashboard(data)
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải dashboard admin.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [])
+
+  const overview = dashboard?.overview
+  const systemManagement = dashboard?.systemManagement
+  const activitySummary = dashboard?.activitySummary
+  const paymentSummary = dashboard?.paymentSummary
+  const revenueSummary = dashboard?.revenueSummary
+  const revenuePeriods = dashboard?.revenuePeriods
+  const dailyRevenueChart = dashboard?.dailyRevenueChart || []
+  const monthlyRevenueChart = dashboard?.monthlyRevenueChart || dashboard?.revenueChart || []
+  const yearlyRevenueChart = dashboard?.yearlyRevenueChart || []
+  const recentUsers = useMemo(() => dashboard?.recentUsers || [], [dashboard?.recentUsers])
+  const recentRooms = useMemo(() => dashboard?.recentRooms || [], [dashboard?.recentRooms])
+  const recentBookings = useMemo(() => dashboard?.recentBookings || [], [dashboard?.recentBookings])
+  const recentPayments = useMemo(() => dashboard?.recentPayments || [], [dashboard?.recentPayments])
+  const topLandlords = useMemo(() => dashboard?.topLandlords || [], [dashboard?.topLandlords])
+  const topRoomType = dashboard?.topRoomType
+  const leadingLandlord = topLandlords[0] || null
+
+  const monthLabel = useMemo(() => new Intl.DateTimeFormat('vi-VN', {
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date()), [])
+
+  const todayLabel = useMemo(() => new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(new Date()), [])
+
+  const yearLabel = useMemo(() => new Intl.DateTimeFormat('vi-VN', {
+    year: 'numeric',
+  }).format(new Date()), [])
+
+  const selectedRevenueChart = revenueMode === 'day'
+    ? dailyRevenueChart
+    : revenueMode === 'year'
+      ? yearlyRevenueChart
+      : monthlyRevenueChart
+
+  const selectedRevenueMeta = revenueMode === 'day'
+    ? {
+        title: 'Doanh thu 7 ngày gần nhất',
+        description: 'Theo dõi tiền thuê, hoa hồng kỳ vọng và hoa hồng đã thu theo ngày.',
+      }
+    : revenueMode === 'year'
+      ? {
+          title: 'Doanh thu theo năm',
+          description: 'Nhìn đường dài của dòng tiền thuê và hiệu quả thu hoa hồng.',
+        }
+      : {
+          title: 'Doanh thu 6 tháng gần nhất',
+          description: 'So sánh tốc độ tăng trưởng doanh thu thuê với tiến độ thu hoa hồng.',
+        }
+
+  const periodCards = [
+    {
+      title: `Hôm nay ${todayLabel}`,
+      data: revenuePeriods?.today,
+    },
+    {
+      title: `Tháng ${monthLabel}`,
+      data: revenuePeriods?.thisMonth,
+    },
+    {
+      title: `Năm ${yearLabel}`,
+      data: revenuePeriods?.thisYear,
+    },
+  ]
+
+  const systemHealth = [
+    {
+      label: 'Người dùng active',
+      value: Number(systemManagement?.activeUsers || 0),
+      total: Number(overview?.totalUsers || 0),
+      tone: 'indigo',
+      detail: `${systemManagement?.lockedUsers || 0} user bị khóa`,
+    },
+    {
+      label: 'Phòng đang thuê',
+      value: Number(systemManagement?.occupiedRooms || 0),
+      total: Number(overview?.totalRooms || 0),
+      tone: 'emerald',
+      detail: `${systemManagement?.pendingRoomApproval || 0} phòng chờ duyệt`,
+    },
+    {
+      label: 'Booking đã xác nhận',
+      value: Number(systemManagement?.confirmedBookings || 0),
+      total: Math.max(
+        Number(systemManagement?.pendingBookings || 0)
+        + Number(systemManagement?.waitingPaymentBookings || 0)
+        + Number(systemManagement?.confirmedBookings || 0),
+        1,
+      ),
+      tone: 'amber',
+      detail: `${systemManagement?.pendingBookings || 0} booking đang chờ`,
+    },
+    {
+      label: 'Hoa hồng đã thu',
+      value: Number(paymentSummary?.commissionPaymentsSuccess || 0),
+      total: Math.max(
+        Number(paymentSummary?.commissionPaymentsSuccess || 0)
+        + Number(paymentSummary?.commissionPaymentsWaiting || 0),
+        1,
+      ),
+      tone: 'sky',
+      detail: `${paymentSummary?.commissionPaymentsWaiting || 0} khoản chờ`,
+    },
+  ]
+
+  const adminAlerts = useMemo(() => {
+    const items = []
+
+    if (Number(systemManagement?.pendingRoomApproval || 0) > 0) {
+      items.push({
+        id: 'pending-rooms',
+        tone: 'warning',
+        title: `${systemManagement.pendingRoomApproval} phòng đang chờ duyệt`,
+        description: 'Kiểm tra lại chất lượng nội dung, ảnh và trạng thái hiển thị để không làm tắc nguồn cung.',
+        to: '/admin/rooms',
+        actionLabel: 'Duyệt phòng',
+      })
+    }
+
+    if (Number(paymentSummary?.waitingConfirmPayments || 0) > 0) {
+      items.push({
+        id: 'waiting-payments',
+        tone: 'info',
+        title: `${paymentSummary.waitingConfirmPayments} payment đang chờ xác nhận`,
+        description: 'Có các giao dịch cần admin đối soát để cập nhật trạng thái cho người dùng.',
+        to: '/admin/payments',
+        actionLabel: 'Mở payment',
+      })
+    }
+
+    if (Number(paymentSummary?.commissionPaymentsWaiting || 0) > 0) {
+      items.push({
+        id: 'waiting-commissions',
+        tone: 'urgent',
+        title: `${paymentSummary.commissionPaymentsWaiting} khoản hoa hồng cần xử lý`,
+        description: 'Ưu tiên các khoản hoa hồng đang treo để bảo toàn dòng tiền hệ thống.',
+        to: '/admin/commission-payments',
+        actionLabel: 'Thu hoa hồng',
+      })
+    }
+
+    if (Number(systemManagement?.pendingBookings || 0) > 0) {
+      items.push({
+        id: 'pending-bookings',
+        tone: 'muted',
+        title: `${systemManagement.pendingBookings} booking đang chờ xử lý`,
+        description: 'Theo dõi để đảm bảo quá trình thuê không bị chậm hoặc rớt luồng.',
+        to: '/admin/contracts',
+        actionLabel: 'Xem hợp đồng',
+      })
+    }
+
+    if (items.length === 0) {
+      items.push({
+        id: 'system-stable',
+        tone: 'success',
+        title: 'Hệ thống đang ổn định',
+        description: 'Hiện không có cảnh báo ưu tiên cao. Bạn có thể tập trung vào tối ưu tăng trưởng.',
+        to: '/admin/users',
+        actionLabel: 'Mở quản trị',
+      })
+    }
+
+    return items.slice(0, 4)
+  }, [paymentSummary, systemManagement])
+
+  const bookingPieData = useMemo(() => {
+    const items = [
+      { name: 'Đã xác nhận', value: Number(systemManagement?.confirmedBookings || 0), color: '#10B981' },
+      { name: 'Chờ thanh toán', value: Number(systemManagement?.waitingPaymentBookings || 0), color: '#2563EB' },
+      { name: 'Đang chờ', value: Number(systemManagement?.pendingBookings || 0), color: '#F59E0B' },
+    ].filter((item) => item.value > 0)
+    return items.length > 0 ? items : [{ name: 'Chưa có dữ liệu', value: 1, color: '#E2E8F0' }]
+  }, [systemManagement])
+
+  const activityFeed = useMemo(() => {
+    const userItems = recentUsers.map((user) => ({
+      id: `user-${user.id}`,
+      type: 'user',
+      title: user.fullName,
+      subtitle: `${formatRoleLabel(user.roleCode)} · ${user.email || user.phone || '---'}`,
+      meta: 'Tài khoản mới',
+      time: user.createdAt,
+      to: '/admin/users',
+    }))
+
+    const roomItems = recentRooms.map((room) => ({
+      id: `room-${room.id}`,
+      type: 'room',
+      title: room.title,
+      subtitle: `${room.propertyName || '---'} · ${formatCurrency(room.price)} đ`,
+      meta: 'Phòng cập nhật',
+      time: room.updatedAt,
+      to: '/admin/rooms',
+    }))
+
+    const bookingItems = recentBookings.map((booking) => ({
+      id: `booking-${booking.id}`,
+      type: 'booking',
+      title: booking.bookingCode,
+      subtitle: `${booking.tenantName || '---'} · ${booking.roomTitle || '---'}`,
+      meta: formatRequestTypeLabel(booking.requestType),
+      time: booking.requestedAt,
+      to: '/admin/contracts',
+    }))
+
+    const paymentItems = recentPayments.map((payment) => ({
+      id: `payment-${payment.paymentCode}`,
+      type: 'payment',
+      title: payment.paymentCode,
+      subtitle: `${formatPaymentTypeLabel(payment.paymentType)} · ${formatCurrency(payment.amount)} đ`,
+      meta: 'Payment mới',
+      time: payment.createdAt,
+      to: '/admin/payments',
+    }))
+
+    return [...userItems, ...roomItems, ...bookingItems, ...paymentItems]
+      .sort((left, right) => getActivityTime(right) - getActivityTime(left))
+      .slice(0, 8)
+  }, [recentBookings, recentPayments, recentRooms, recentUsers])
+
+  if (loading) {
+    return (
+      <div className="dashboard-page admin-dashboard-page">
+        <div className="dashboard-container admin-dashboard-shell">
+          <section className="admin-overview-hero admin-loading-panel">
+            <span className="admin-hero-badge">ADMIN HUB</span>
+            <h1>Dashboard admin</h1>
+            <p>Đang dựng trung tâm điều hành hệ thống, dữ liệu doanh thu và các bảng quản trị...</p>
+            <div className="dashboard-empty">Đang tải dashboard admin...</div>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page admin-dashboard-page">
+      <div className="dashboard-container admin-dashboard-shell">
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="admin-overview-hero">
+          <span className="admin-hero-badge">ADMIN HUB</span>
+          <div className="admin-overview-head">
+            <div>
+              <h1>Dashboard điều hành hệ thống</h1>
+              <p>Giao diện được làm lại theo phong cách của dashboard chủ trọ, nhưng đầy đủ hơn cho admin: điều phối nhanh, biểu đồ hệ thống, activity center và các bảng quản trị chi tiết.</p>
+            </div>
+            <div className="admin-overview-side">
+              <span>Hoa hồng còn phải thu</span>
+              <strong>{formatCurrency(revenueSummary?.outstandingCommissionRevenue || 0)} đ</strong>
+              <small>{paymentSummary?.commissionPaymentsWaiting || 0} khoản đang chờ xử lý</small>
+            </div>
+          </div>
+
+          <div className="admin-hero-kpi-grid">
+            <article className="admin-hero-kpi-card">
+              <span>Tổng người dùng</span>
+              <strong>{overview?.totalUsers || 0}</strong>
+            </article>
+            <article className="admin-hero-kpi-card">
+              <span>Tổng phòng</span>
+              <strong>{overview?.totalRooms || 0}</strong>
+            </article>
+            <article className="admin-hero-kpi-card">
+              <span>Người hoạt động tháng này</span>
+              <strong>{activitySummary?.activeUsersThisMonth || 0}</strong>
+            </article>
+            <article className="admin-hero-kpi-card">
+              <span>Chủ trọ doanh thu cao nhất</span>
+              <strong>{leadingLandlord?.landlordName || '---'}</strong>
+            </article>
+          </div>
+        </section>
+
+        <div className="admin-dashboard-stack">
+          <section className="admin-dashboard-card admin-main-section">
+            <div className="admin-section-heading admin-section-heading-split">
+              <div>
+                <h2>Biểu đồ và hiệu suất hệ thống</h2>
+                <p>Doanh thu, phân bổ booking và xu hướng thu chi theo thời gian.</p>
+              </div>
+              <div className="admin-segmented-control">
+                {REVENUE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={revenueMode === option.value ? 'active' : ''}
+                    onClick={() => setRevenueMode(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="admin-period-grid">
+              {periodCards.map((period) => (
+                <article key={period.title} className="admin-period-card">
+                  <strong>{period.title}</strong>
+                  <span>Thuê: {formatCurrency(period.data?.grossRentRevenue || 0)} đ</span>
+                  <span>Kỳ vọng: {formatCurrency(period.data?.expectedCommissionRevenue || 0)} đ</span>
+                  <span>Đã thu: {formatCurrency(period.data?.collectedCommissionRevenue || 0)} đ</span>
+                </article>
+              ))}
+            </div>
+
+            <article className="admin-chart-card admin-chart-card-revenue">
+                <div className="admin-card-heading">
+                <div>
+                  <span className="admin-card-kicker">Doanh thu</span>
+                  <h3>{selectedRevenueMeta.title}</h3>
+                  <p>{selectedRevenueMeta.description}</p>
+                </div>
+              </div>
+
+              {selectedRevenueChart.length === 0 ? (
+                <div className="dashboard-empty">Chưa có dữ liệu doanh thu để vẽ biểu đồ.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={selectedRevenueChart} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap="28%" barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(v) => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={48} />
+                    <Tooltip formatter={(value, name) => [formatCurrency(value) + ' đ', name]} labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: 4 }} contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    <Bar dataKey="grossRentRevenue" name="Tiền thuê" fill="#0E7490" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="expectedCommissionRevenue" name="Hoa hồng kỳ vọng" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="collectedCommissionRevenue" name="Hoa hồng đã thu" fill="#06B6D4" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </article>
+
+            <article className="admin-chart-card admin-chart-card-area">
+              <div className="admin-card-heading">
+                <div>
+                  <span className="admin-card-kicker">Thu chi</span>
+                  <h3>Dòng thu nhập theo tháng</h3>
+                  <p>Biểu đồ gợn sóng thể hiện xu hướng tiền thuê và hoa hồng đã thu.</p>
+                </div>
+              </div>
+
+              {monthlyRevenueChart.length === 0 ? (
+                <div className="dashboard-empty">Chưa có dữ liệu doanh thu tháng.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={monthlyRevenueChart} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="adminColorRent" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0E7490" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#0E7490" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="adminColorCommission" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94A3B8', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(v) => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v} tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={48} />
+                    <Tooltip formatter={(value, name) => [formatCurrency(value) + ' đ', name]} labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: 4 }} contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                    <Area type="monotone" dataKey="grossRentRevenue" name="Tiền thuê" stroke="#0E7490" strokeWidth={2.5} fill="url(#adminColorRent)" dot={false} />
+                    <Area type="monotone" dataKey="collectedCommissionRevenue" name="Hoa hồng đã thu" stroke="#06B6D4" strokeWidth={2.5} fill="url(#adminColorCommission)" dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </article>
+
+            <div className="admin-secondary-grid">
+              <article className="admin-chart-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <span className="admin-card-kicker">Phân bổ booking</span>
+                    <h3>Tần suất trạng thái booking</h3>
+                    <p>Biểu đồ tròn thể hiện phân bổ các trạng thái booking trong hệ thống.</p>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={bookingPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {bookingPieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v, name) => [`${v} booking`, name]}
+                      contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 12 }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </article>
+
+              <article className="admin-chart-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <span className="admin-card-kicker">Hiệu suất</span>
+                    <h3>Điểm nhấn điều hành</h3>
+                    <p>Tập trung vào chủ trọ nổi bật, loại phòng hiệu quả và khoản doanh thu đang treo.</p>
+                  </div>
+                </div>
+
+                <div className="admin-insight-grid">
+                  <article className="admin-insight-card">
+                    <span>Chủ trọ doanh thu cao nhất</span>
+                    <strong>{leadingLandlord?.landlordName || 'Chưa có dữ liệu'}</strong>
+                    <p>{formatCurrency(leadingLandlord?.grossRevenue || 0)} đ doanh thu thuê</p>
+                  </article>
+                  <article className="admin-insight-card">
+                    <span>Loại phòng thuê nhiều nhất</span>
+                    <strong>{topRoomType?.roomType || 'Chưa có dữ liệu'}</strong>
+                    <p>{topRoomType?.successfulBookings || 0} booking đã xác nhận</p>
+                  </article>
+                  <article className="admin-insight-card">
+                    <span>Hoa hồng còn phải thu</span>
+                    <strong>{formatCurrency(revenueSummary?.outstandingCommissionRevenue || 0)} đ</strong>
+                    <p>{paymentSummary?.commissionPaymentsWaiting || 0} khoản chưa xử lý xong</p>
+                  </article>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section className="admin-dashboard-card admin-main-section">
+            <div className="admin-section-heading">
+              <div>
+                <span className="admin-section-badge">Phần 3</span>
+                <h2>Activity center và bảng điều hành chi tiết</h2>
+                <p>Phần này gom activity feed, cảnh báo hệ thống, bảng user, phòng, booking, payment và xếp hạng chủ trọ.</p>
+              </div>
+            </div>
+
+            <div className="admin-activity-grid">
+              <section className="admin-feed-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <span className="admin-card-kicker">Hoạt động</span>
+                    <h3>Dòng cập nhật gần đây</h3>
+                  </div>
+                </div>
+
+                <div className="admin-activity-stack">
+                  {activityFeed.length === 0 ? (
+                    <div className="dashboard-empty">Chưa có hoạt động nào để hiển thị.</div>
+                  ) : (
+                    activityFeed.map((item) => (
+                      <article key={item.id} className={`admin-activity-item ${item.type}`}>
+                        <div className="admin-activity-badge">{item.meta}</div>
+                        <strong>{item.title}</strong>
+                        <p>{item.subtitle}</p>
+                        <div className="admin-activity-footer">
+                          <span>{formatDateTime(item.time)}</span>
+                          <Link to={item.to}>Mở</Link>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="admin-feed-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <span className="admin-card-kicker">Cảnh báo</span>
+                    <h3>Điểm cần xử lý ngay</h3>
+                  </div>
+                </div>
+
+                <div className="admin-alert-stack">
+                  {adminAlerts.map((alert) => (
+                    <article key={alert.id} className={`admin-alert-item ${alert.tone}`}>
+                      <div>
+                        <strong>{alert.title}</strong>
+                        <p>{alert.description}</p>
+                      </div>
+                      <Link to={alert.to}>{alert.actionLabel}</Link>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="admin-detail-grid">
+              <section className="dashboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Người dùng mới</h2>
+                    <p>User tạo gần đây để admin kiểm tra nhanh role và trạng thái.</p>
+                  </div>
+                </div>
+
+                {recentUsers.length === 0 ? (
+                  <div className="dashboard-empty">Chưa có user nào.</div>
+                ) : (
+                  <div className="stack-list">
+                    {recentUsers.map((user) => (
+                      <article key={user.id} className="stack-card">
+                        <div className="stack-card-top">
+                          <div>
+                            <h3>{user.fullName}</h3>
+                            <p className="stack-note">{user.email || user.phone || '---'}</p>
+                          </div>
+                          <span className={`status-pill ${user.status}`}>{user.status}</span>
+                        </div>
+                        <div className="metric-row">
+                          <span>{formatRoleLabel(user.roleCode)}</span>
+                          <span>Tạo: {formatDateTime(user.createdAt)}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="dashboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Phòng cập nhật gần đây</h2>
+                    <p>Giúp admin thấy nhanh phòng mới, phòng đang ẩn hay phòng chờ duyệt.</p>
+                  </div>
+                </div>
+
+                {recentRooms.length === 0 ? (
+                  <div className="dashboard-empty">Chưa có phòng nào.</div>
+                ) : (
+                  <div className="stack-list">
+                    {recentRooms.map((room) => (
+                      <article key={room.id} className="stack-card">
+                        <div className="stack-card-top">
+                          <div>
+                            <h3>{room.title}</h3>
+                            <p className="stack-note">{room.propertyName}</p>
+                          </div>
+                          <span className={`status-pill ${room.status}`}>{room.status}</span>
+                        </div>
+                        <div className="metric-row">
+                          <span>{room.landlordName || '---'}</span>
+                          <span>{formatCurrency(room.price)} đ</span>
+                          <span>{room.approvalStatus}</span>
+                        </div>
+                        <p className="stack-note">Cập nhật: {formatDateTime(room.updatedAt)}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <section className="dashboard-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Booking gần đây</h2>
+                  <p>Nhìn nhanh các yêu cầu thuê hoặc đặt lịch mới được gửi lên hệ thống.</p>
+                </div>
+              </div>
+
+              {recentBookings.length === 0 ? (
+                <div className="dashboard-empty">Chưa có booking nào.</div>
+              ) : (
+                <div className="table-shell">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Mã booking</th>
+                        <th>Loại</th>
+                        <th>Phòng</th>
+                        <th>Người thuê</th>
+                        <th>Chủ trọ</th>
+                        <th>Trạng thái</th>
+                        <th>Thời gian</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentBookings.map((booking) => (
+                        <tr key={booking.id}>
+                          <td>{booking.bookingCode}</td>
+                          <td>{formatRequestTypeLabel(booking.requestType)}</td>
+                          <td>{booking.roomTitle || '---'}</td>
+                          <td>{booking.tenantName || '---'}</td>
+                          <td>{booking.landlordName || '---'}</td>
+                          <td>
+                            <span className={`status-pill ${booking.status}`}>{booking.status}</span>
+                          </td>
+                          <td>{formatDateTime(booking.requestedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <div className="admin-detail-grid">
+              <section className="dashboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Thanh toán gần đây</h2>
+                    <p>Theo dõi payment toàn hệ thống và các khoản hoa hồng mà chủ trọ cần thanh toán cho admin.</p>
+                  </div>
+                  <div className="inline-actions">
+                    <Link to="/admin/payments" className="primary-button card-link-button">
+                      Lịch sử thanh toán
+                    </Link>
+                    <Link to="/admin/commission-payments" className="ghost-button card-link-button">
+                      Thu hoa hồng
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="detail-summary-grid user-payment-stats">
+                  <div className="detail-summary-item">
+                    <span>Payment chờ thanh toán</span>
+                    <strong>{paymentSummary?.pendingPayments || 0}</strong>
+                  </div>
+                  <div className="detail-summary-item">
+                    <span>Chờ xác nhận</span>
+                    <strong>{paymentSummary?.waitingConfirmPayments || 0}</strong>
+                  </div>
+                  <div className="detail-summary-item">
+                    <span>Đã thành công</span>
+                    <strong>{paymentSummary?.successfulPayments || 0}</strong>
+                  </div>
+                  <div className="detail-summary-item">
+                    <span>Đã hết hạn</span>
+                    <strong>{paymentSummary?.expiredPayments || 0}</strong>
+                  </div>
+                </div>
+
+                {recentPayments.length === 0 ? (
+                  <div className="dashboard-empty">Chưa có payment nào.</div>
+                ) : (
+                  <div className="stack-list">
+                    {recentPayments.map((payment) => (
+                      <article key={payment.paymentCode} className="stack-card">
+                        <div className="stack-card-top">
+                          <div>
+                            <h3>{payment.paymentCode}</h3>
+                            <p className="stack-note">{formatPaymentTypeLabel(payment.paymentType)}</p>
+                          </div>
+                          <span className={`status-pill ${payment.status}`}>{payment.status}</span>
+                        </div>
+                        <div className="metric-row">
+                          <span>Người trả: {payment.payerName || '---'}</span>
+                          <span>Người nhận: {payment.payeeName || '---'}</span>
+                        </div>
+                        <div className="metric-row">
+                          <span>{formatCurrency(payment.amount)} đ</span>
+                          <span>{formatDateTime(payment.createdAt)}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="dashboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Bảng xếp hạng chủ trọ</h2>
+                    <p>Gom chủ trọ doanh thu cao nhất, hoa hồng kỳ vọng và số payment thuê thành công.</p>
+                  </div>
+                </div>
+
+                {topLandlords.length === 0 ? (
+                  <div className="dashboard-empty">Chưa có chủ trọ nào phát sinh doanh thu thuê phòng.</div>
+                ) : (
+                  <div className="table-shell">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Chủ trọ</th>
+                          <th>Liên hệ</th>
+                          <th>Doanh thu thuê</th>
+                          <th>Hoa hồng kỳ vọng</th>
+                          <th>Payment thuê thành công</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topLandlords.map((landlord) => (
+                          <tr key={landlord.landlordId}>
+                            <td>{landlord.landlordName || '---'}</td>
+                            <td>
+                              <div className="table-sub">{landlord.landlordEmail || '---'}</div>
+                              <div className="table-sub">{landlord.landlordPhone || '---'}</div>
+                            </td>
+                            <td>{formatCurrency(landlord.grossRevenue)} đ</td>
+                            <td>{formatCurrency(landlord.expectedCommission)} đ</td>
+                            <td>{landlord.successfulRentPayments}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}

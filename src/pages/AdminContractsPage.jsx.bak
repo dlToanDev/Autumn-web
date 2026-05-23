@@ -1,0 +1,141 @@
+// Trang AdminContractsPage giup admin theo doi toan bo hop dong he thong.
+// Page nay chu yeu la read-only: danh sach + modal chi tiet.
+import { useEffect, useState } from 'react'
+import ContractDetailModal from '../components/ContractDetailModal'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import { getAdminContractById, getAdminContracts } from '../api/contractApi'
+import { formatContractStatusLabel, formatDate } from '../utils/rentalFormat'
+
+export default function AdminContractsPage() {
+  const [contracts, setContracts] = useState([])
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    // Tai danh sach contract tong hop cho admin.
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const data = await getAdminContracts()
+        setContracts(data)
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách hợp đồng hệ thống.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  const openContractDetail = async (contractId) => {
+    // Chi tiet duoc tai rieng khi mo modal de danh sach nhe hon.
+    setDetailLoading(true)
+    setSelectedContract({})
+    setError('')
+
+    try {
+      const data = await getAdminContractById(contractId)
+      setSelectedContract(data)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tải chi tiết hợp đồng.')
+      setSelectedContract(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải hợp đồng hệ thống...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang lưu trữ hợp đồng toàn hệ thống"
+          description={[
+            'Bạn có thể xem bản lưu hợp đồng, theo dõi trạng thái ký và kiểm tra hồ sơ của hai bên ngay tại đây.',
+            'Nếu cần xử lý phát sinh với landlord hoặc user, hãy mở hộp tin.',
+          ]}
+          action={{ to: '/messages', label: 'Mở hộp tin' }}
+        />
+
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="dashboard-panel">
+          {contracts.length === 0 ? (
+            <div className="dashboard-empty">Hệ thống chưa có hợp đồng nào.</div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã hợp đồng</th>
+                    <th>Chủ trọ</th>
+                    <th>Người thuê</th>
+                    <th>Phòng</th>
+                    <th>Thời hạn</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((contract, index) => (
+                    <tr key={contract.id}>
+                      <td>{index + 1}</td>
+                      <td>{contract.contractCode}</td>
+                      <td>
+                        <strong>{contract.landlordName}</strong>
+                        <div className="table-sub">{contract.landlordPhone || contract.landlordEmail || '---'}</div>
+                      </td>
+                      <td>
+                        <strong>{contract.tenantName}</strong>
+                        <div className="table-sub">{contract.tenantPhone || contract.tenantEmail || '---'}</div>
+                      </td>
+                      <td>
+                        <strong>{contract.roomTitle}</strong>
+                        <div className="table-sub">{contract.propertyName}</div>
+                      </td>
+                      <td>{formatDate(contract.startDate)} - {formatDate(contract.endDate)}</td>
+                      <td>
+                        <span className={`status-pill ${contract.status}`}>{formatContractStatusLabel(contract.status)}</span>
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button type="button" className="ghost-button compact" onClick={() => openContractDetail(contract.id)}>
+                            Xem hợp đồng
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedContract && (
+          <ContractDetailModal
+            contract={selectedContract}
+            loading={detailLoading}
+            onClose={() => setSelectedContract(null)}
+            title="Bản lưu hợp đồng của admin"
+          />
+        )}
+      </div>
+    </div>
+  )
+}

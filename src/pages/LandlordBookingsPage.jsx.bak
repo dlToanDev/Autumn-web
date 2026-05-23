@@ -1,0 +1,482 @@
+// Trang LandlordBookingsPage cho chu tro xu ly yeu cau thue/dat lich.
+// Chuc nang chinh:
+// - Loc booking theo status/request type
+// - Mo chi tiet booking
+// - Review theo nghiep vu landlord
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import {
+  getLandlordBookingById,
+  getLandlordBookingRequests,
+  reviewLandlordBooking,
+} from '../api/bookingApi'
+import { formatDate, formatDateTime } from '../utils/rentalFormat'
+
+const defaultFilters = {
+  status: '',
+  requestType: '',
+}
+
+const statusOptions = [
+  { value: '', label: 'Tất cả trạng thái' },
+  { value: 'pending', label: 'Chờ xử lý' },
+  { value: 'waiting_payment', label: 'Chờ thanh toán' },
+  { value: 'paid', label: 'Đã thanh toán' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'rejected', label: 'Đã từ chối' },
+]
+
+const requestTypeOptions = [
+  { value: '', label: 'Tất cả loại yêu cầu' },
+  { value: 'rent', label: 'Thuê phòng' },
+  { value: 'schedule_visit', label: 'Đặt lịch xem' },
+]
+
+function formatRequestTypeLabel(value) {
+  return value === 'schedule_visit' ? 'Đặt lịch xem' : 'Thuê phòng'
+}
+
+function formatBookingStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Chờ xử lý'
+  if (normalized === 'waiting_payment') return 'Chờ thanh toán'
+  if (normalized === 'paid') return 'Đã thanh toán'
+  if (normalized === 'confirmed') return 'Đã xác nhận'
+  if (normalized === 'rejected') return 'Đã từ chối'
+  if (normalized === 'canceled') return 'Đã hủy'
+  if (normalized === 'expired') return 'Hết hạn'
+  return value || '---'
+}
+
+function formatRoomStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'available') return 'Còn trống'
+  if (normalized === 'reserved') return 'Đã giữ chỗ'
+  if (normalized === 'rented') return 'Đã thuê'
+  if (normalized === 'hidden') return 'Đang ẩn'
+  return value || '---'
+}
+
+function canConfirm(booking) {
+  // Chi mot so status moi cho phep chu tro xac nhan tiep.
+  const normalized = String(booking.status).toLowerCase()
+  return normalized === 'pending' || normalized === 'paid'
+}
+
+function canReject(booking) {
+  const normalized = String(booking.status).toLowerCase()
+  return normalized === 'pending' || normalized === 'waiting_payment'
+}
+
+function canMarkRented(booking) {
+  return booking.requestType === 'rent'
+    && String(booking.status).toLowerCase() === 'confirmed'
+    && String(booking.roomStatus).toLowerCase() !== 'rented'
+}
+
+export default function LandlordBookingsPage() {
+  const navigate = useNavigate()
+  const [filters, setFilters] = useState(defaultFilters)
+  const [bookings, setBookings] = useState([])
+  const [selectedBooking, setSelectedBooking] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [acting, setActing] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const loadBookings = async (nextFilters = filters) => {
+    const data = await getLandlordBookingRequests({
+      status: nextFilters.status || undefined,
+      requestType: nextFilters.requestType || undefined,
+    })
+    setBookings(data)
+    return data
+  }
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await loadBookings(defaultFilters)
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách yêu cầu thuê/đặt lịch.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [navigate])
+
+  const stats = useMemo(() => ({
+    total: bookings.length,
+    pending: bookings.filter((item) => String(item.status).toLowerCase() === 'pending').length,
+    rent: bookings.filter((item) => item.requestType === 'rent').length,
+    scheduleVisit: bookings.filter((item) => item.requestType === 'schedule_visit').length,
+  }), [bookings])
+
+  const handleFilterChange = async (field, value) => {
+    const nextFilters = { ...filters, [field]: value }
+    setFilters(nextFilters)
+    setSelectedBooking(null)
+    setMessage('')
+    setError('')
+    setLoading(true)
+
+    try {
+      await loadBookings(nextFilters)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể lọc danh sách yêu cầu.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openDetail = async (bookingId) => {
+    setDetailLoading(true)
+    setError('')
+
+    try {
+      const data = await getLandlordBookingById(bookingId)
+      setSelectedBooking(data)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tải chi tiết yêu cầu.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const handleAction = async (booking, action, successText) => {
+    const confirmed = window.confirm(successText)
+    if (!confirmed) return
+
+    setActing(true)
+    setMessage('')
+    setError('')
+
+    try {
+      const updatedBooking = await reviewLandlordBooking(booking.id, { action })
+      setMessage(action === 'confirm'
+        ? 'Đã xác nhận yêu cầu thành công.'
+        : action === 'reject'
+          ? 'Đã từ chối yêu cầu.'
+          : 'Đã đánh dấu phòng là đã thuê.')
+
+      if (selectedBooking?.id === booking.id) {
+        setSelectedBooking(updatedBooking)
+      }
+
+      await loadBookings(filters)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể xử lý yêu cầu.')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải danh sách yêu cầu thuê/đặt lịch...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang quản lý booking của bạn"
+          description={[
+            'Mọi yêu cầu thuê phòng hoặc đặt lịch xem đều được gom tại đây để bạn xác nhận và xử lý nhanh.',
+            'Nếu có tình huống phát sinh cần hỗ trợ thêm, hãy liên hệ admin.',
+          ]}
+          action={{ to: '/messages', label: 'Liên hệ admin' }}
+        />
+
+        <div className="hero-stats dashboard-metric-grid">
+          <div className="hero-stat-card">
+            <strong>{stats.total}</strong>
+            <span>tổng yêu cầu</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{stats.pending}</strong>
+            <span>đang chờ xử lý</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{stats.rent}</strong>
+            <span>yêu cầu thuê</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{stats.scheduleVisit}</strong>
+            <span>lịch hẹn xem phòng</span>
+          </div>
+        </div>
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="dashboard-panel">
+          <div className="room-toolbar">
+            <div>
+              <h2>Danh sách yêu cầu</h2>
+              <p>Theo dõi khách thuê, lịch xem phòng và chốt trạng thái phòng ngay tại đây.</p>
+            </div>
+          </div>
+
+          <div className="booking-filter-bar">
+            <label className="form-field">
+              <span>Trạng thái</span>
+              <select value={filters.status} onChange={(event) => handleFilterChange('status', event.target.value)}>
+                {statusOptions.map((item) => (
+                  <option key={item.value || 'all-status'} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Loại yêu cầu</span>
+              <select value={filters.requestType} onChange={(event) => handleFilterChange('requestType', event.target.value)}>
+                {requestTypeOptions.map((item) => (
+                  <option key={item.value || 'all-request-type'} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {bookings.length === 0 ? (
+            <div className="dashboard-empty">Hiện chưa có yêu cầu nào phù hợp với bộ lọc.</div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã yêu cầu</th>
+                    <th>Loại</th>
+                    <th>Người thuê</th>
+                    <th>Phòng</th>
+                    <th>Ngày hẹn / vào ở</th>
+                    <th>Trạng thái yêu cầu</th>
+                    <th>Trạng thái phòng</th>
+                    <th>Gửi lúc</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookings.map((booking, index) => (
+                    <tr key={booking.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{booking.bookingCode}</strong>
+                      </td>
+                      <td>{formatRequestTypeLabel(booking.requestType)}</td>
+                      <td>
+                        <strong>{booking.tenantName}</strong>
+                        <div className="table-sub">{booking.tenantPhone || booking.tenantEmail || '---'}</div>
+                      </td>
+                      <td>
+                        <strong>{booking.roomTitle}</strong>
+                        <div className="table-sub">{booking.propertyName}</div>
+                      </td>
+                      <td>
+                        {booking.requestType === 'schedule_visit'
+                          ? formatDateTime(booking.appointmentAt)
+                          : formatDate(booking.moveInDate)}
+                      </td>
+                      <td>
+                        <span className={`status-pill ${booking.status}`}>{formatBookingStatusLabel(booking.status)}</span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${booking.roomStatus}`}>{formatRoomStatusLabel(booking.roomStatus)}</span>
+                      </td>
+                      <td>{formatDateTime(booking.requestedAt)}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button type="button" className="ghost-button compact" onClick={() => openDetail(booking.id)}>
+                            Xem chi tiết
+                          </button>
+                          {canConfirm(booking) && (
+                            <button
+                              type="button"
+                              className="primary-button compact"
+                              onClick={() => handleAction(booking, 'confirm', 'Bạn muốn xác nhận yêu cầu này?')}
+                              disabled={acting}
+                            >
+                              Xác nhận
+                            </button>
+                          )}
+                          {canMarkRented(booking) && (
+                            <button
+                              type="button"
+                              className="primary-button compact"
+                              onClick={() => handleAction(booking, 'mark_rented', 'Bạn muốn đánh dấu phòng này là đã thuê?')}
+                              disabled={acting}
+                            >
+                              Đã thuê
+                            </button>
+                          )}
+                          {canReject(booking) && (
+                            <button
+                              type="button"
+                              className="danger-button compact"
+                              onClick={() => handleAction(booking, 'reject', 'Bạn muốn từ chối yêu cầu này?')}
+                              disabled={acting}
+                            >
+                              Từ chối
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedBooking && (
+          <div className="detail-modal-backdrop" onClick={() => setSelectedBooking(null)}>
+            <div className="detail-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="panel-heading">
+                <div>
+                  <h2>Chi tiết yêu cầu</h2>
+                  <p>{selectedBooking.bookingCode}</p>
+                </div>
+                <button type="button" className="ghost-button" onClick={() => setSelectedBooking(null)}>
+                  Đóng
+                </button>
+              </div>
+
+              {detailLoading ? (
+                <div className="dashboard-empty">Đang tải chi tiết yêu cầu...</div>
+              ) : (
+                <>
+                  <div className="detail-grid">
+                    <div className="detail-card">
+                      <span>Loại yêu cầu</span>
+                      <strong>{formatRequestTypeLabel(selectedBooking.requestType)}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Trạng thái yêu cầu</span>
+                      <strong>{formatBookingStatusLabel(selectedBooking.status)}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Trạng thái phòng</span>
+                      <strong>{formatRoomStatusLabel(selectedBooking.roomStatus)}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Gửi lúc</span>
+                      <strong>{formatDateTime(selectedBooking.requestedAt)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="applicant-card">
+                    <div className="applicant-avatar-wrap">
+                      {selectedBooking.tenantAvatarUrl ? (
+                        <img src={selectedBooking.tenantAvatarUrl} alt={selectedBooking.tenantName} className="applicant-avatar" />
+                      ) : (
+                        <div className="applicant-avatar applicant-avatar-fallback">
+                          {selectedBooking.tenantName?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="applicant-info-grid">
+                      <div><strong>Người thuê:</strong> {selectedBooking.tenantName || '---'}</div>
+                      <div><strong>Email:</strong> {selectedBooking.tenantEmail || '---'}</div>
+                      <div><strong>Số điện thoại:</strong> {selectedBooking.tenantPhone || '---'}</div>
+                      <div><strong>Phòng:</strong> {selectedBooking.roomTitle}</div>
+                      <div className="full-row"><strong>Khu trọ:</strong> {selectedBooking.propertyName}</div>
+                      <div className="full-row"><strong>Địa chỉ:</strong> {selectedBooking.fullAddress || '---'}</div>
+                    </div>
+                  </div>
+
+                  <div className="detail-grid">
+                    {selectedBooking.requestType === 'schedule_visit' ? (
+                      <div className="detail-card booking-wide-card">
+                        <span>Lịch hẹn xem phòng</span>
+                        <strong>{formatDateTime(selectedBooking.appointmentAt)}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="detail-card">
+                          <span>Ngày vào ở</span>
+                          <strong>{formatDate(selectedBooking.moveInDate)}</strong>
+                        </div>
+                        <div className="detail-card">
+                          <span>Số tháng thuê</span>
+                          <strong>{selectedBooking.monthsToRent} tháng</strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {selectedBooking.message && (
+                    <div className="note-box">
+                      <strong>Lời nhắn từ người thuê</strong>
+                      <p>{selectedBooking.message}</p>
+                    </div>
+                  )}
+
+                  {selectedBooking.roomImageUrl && (
+                    <div className="detail-image-grid">
+                      <div className="detail-image-card">
+                        <img src={selectedBooking.roomImageUrl} alt={selectedBooking.roomTitle} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="inline-actions booking-modal-actions">
+                    {canConfirm(selectedBooking) && (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => handleAction(selectedBooking, 'confirm', 'Bạn muốn xác nhận yêu cầu này?')}
+                        disabled={acting}
+                      >
+                        Xác nhận yêu cầu
+                      </button>
+                    )}
+                    {canMarkRented(selectedBooking) && (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => handleAction(selectedBooking, 'mark_rented', 'Bạn muốn đánh dấu phòng này là đã thuê?')}
+                        disabled={acting}
+                      >
+                        Đánh dấu đã thuê
+                      </button>
+                    )}
+                    {canReject(selectedBooking) && (
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() => handleAction(selectedBooking, 'reject', 'Bạn muốn từ chối yêu cầu này?')}
+                        disabled={acting}
+                      >
+                        Từ chối yêu cầu
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

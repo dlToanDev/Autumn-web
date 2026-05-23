@@ -1,0 +1,83 @@
+// RoomCard la component hien mot phong trong danh sach.
+// Duoc dung boi HomePage va RoomSearchPage de tai su dung cung mot giao dien card.
+import { Link } from 'react-router-dom'
+import { FiHome, FiMapPin, FiMaximize2, FiUsers } from 'react-icons/fi'
+import { HiOutlineSparkles } from 'react-icons/hi2'
+import '../styles/components/RoomCard.css'
+import {
+  formatCurrency,
+  formatGenderAllowed,
+  getRoomThumbnail,
+} from '../utils/rentalFormat'
+
+export default function RoomCard({ room }) {
+  // getRoomThumbnail chon anh thumbnail neu backend cung cap.
+  const imageUrl = getRoomThumbnail(room)
+  const amenities = room.amenities || []
+  const amenityPreview = amenities.slice(0, 4)
+  const extraAmenityCount = Math.max(amenities.length - amenityPreview.length, 0)
+
+  return (
+    <article className="room-card">
+      <div className="room-card-media">
+        {imageUrl ? (
+          <img src={imageUrl} alt={room.title} />
+        ) : (
+          <div className="room-placeholder">Không có ảnh</div>
+        )}
+        <span className={`status-pill ${room.status}`}>{room.status}</span>
+      </div>
+
+      <div className="room-card-body">
+        <div className="room-card-heading">
+          <div className="room-card-title-wrap">
+            <span className="room-card-kicker">
+              <HiOutlineSparkles />
+              Phòng nổi bật
+            </span>
+            <h3>{room.title}</h3>
+          </div>
+          <strong>{formatCurrency(room.price)} đ</strong>
+        </div>
+
+        <p className="room-card-property">
+          <FiHome />
+          {room.propertyName}
+        </p>
+        <p className="room-card-address">
+          <FiMapPin />
+          {room.fullAddress}
+        </p>
+
+        <div className="metric-row">
+          <span>
+            <FiMaximize2 />
+            {room.area} m²
+          </span>
+          <span>
+            <FiUsers />
+            {room.maxTenants} người
+          </span>
+          <span>{formatGenderAllowed(room.genderAllowed)}</span>
+          {room.roomType && <span>{room.roomType}</span>}
+        </div>
+
+        {room.description && <p className="stack-note clamp-2">{room.description}</p>}
+
+        <div className="tag-row">
+          {amenityPreview.map((amenity) => (
+            <span key={amenity.id} className="mini-tag">{amenity.name}</span>
+          ))}
+          {extraAmenityCount > 0 && <span className="mini-tag">+{extraAmenityCount} tiện ích</span>}
+        </div>
+
+        <div className="inline-actions">
+          {/* Chuyen sang RoomDetailPage de xem day du thong tin va tao booking. */}
+          <Link to={`/rooms/${room.id}`} className="ghost-button card-link-button">
+            Xem chi tiết
+          </Link>
+        </div>
+      </div>
+    </article>
+  )
+}

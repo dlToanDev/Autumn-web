@@ -1,0 +1,31 @@
+// File utility nay chi lo "presentation logic" cho thong bao:
+// - doi type code thanh nhan de doc
+// - doi type code thanh class CSS
+// Tach rieng ra de:
+// - NotificationsPage va NotificationDetailPage dung chung
+// - tranh viet trung logic o nhieu file
+export function formatNotificationTypeLabel(value) {
+  // Backend tra type duoi dang code ngan.
+  // Frontend doi sang nhan tieng Viet de hien thi dep hon.
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'announcement') return 'Thông báo đặc biệt'
+  if (normalized === 'booking') return 'Booking'
+  if (normalized === 'payment') return 'Thanh toán'
+  if (normalized === 'contract') return 'Hợp đồng'
+  if (normalized === 'review') return 'Đánh giá'
+  if (normalized === 'profile') return 'Tài khoản'
+  if (normalized === 'system') return 'Hệ thống'
+  return value || 'Khác'
+}
+
+export function getNotificationTypeClass(value) {
+  // Tra ten class CSS de giao dien gan mau phu hop voi tung loai thong bao.
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'announcement') return 'announcement'
+  if (normalized === 'booking') return 'booking'
+  if (normalized === 'payment') return 'payment'
+  if (normalized === 'contract') return 'contract'
+  if (normalized === 'review') return 'review'
+  if (normalized === 'profile') return 'profile'
+  return 'system'
+}

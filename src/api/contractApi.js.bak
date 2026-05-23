@@ -1,0 +1,65 @@
+// contractApi tap trung cac endpoint hop dong cho landlord, tenant va admin.
+import apiClient from './apiClient'
+
+function authConfig() {
+  // Hop dong luon la du lieu rieng theo vai tro nen can token cho moi request.
+  const token = localStorage.getItem('token')
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
+export async function getLandlordTenants() {
+  // LandlordTenantsPage lay danh sach nguoi thue du dieu kien lap hop dong.
+  const response = await apiClient.get('/api/landlord/tenants', authConfig())
+  return response.data
+}
+
+export async function getLandlordContracts() {
+  // Landlord co the xem danh sach hop dong da tao.
+  const response = await apiClient.get('/api/contracts/landlord', authConfig())
+  return response.data
+}
+
+export async function getLandlordContractById(contractId) {
+  const response = await apiClient.get(`/api/contracts/landlord/${contractId}`, authConfig())
+  return response.data
+}
+
+export async function createLandlordContract(payload) {
+  // Chu tro tao ban hop dong online tu form tenant management.
+  const response = await apiClient.post('/api/contracts/landlord', payload, authConfig())
+  return response.data
+}
+
+export async function uploadLandlordContractFile(contractId, payload) {
+  // Sau khi ky, landlord upload file chu ky len backend.
+  const response = await apiClient.post(`/api/contracts/landlord/${contractId}/landlord-file`, payload, authConfig())
+  return response.data
+}
+
+export async function getMyContracts() {
+  // UserContractsPage lay hop dong cua nguoi thue.
+  const response = await apiClient.get('/api/contracts/my', authConfig())
+  return response.data
+}
+
+export async function getMyContractById(contractId) {
+  const response = await apiClient.get(`/api/contracts/my/${contractId}`, authConfig())
+  return response.data
+}
+
+export async function uploadTenantContractFile(contractId, payload) {
+  // Nguoi thue upload file da ky cua minh.
+  const response = await apiClient.post(`/api/contracts/my/${contractId}/tenant-file`, payload, authConfig())
+  return response.data
+}
+
+export async function getAdminContracts() {
+  // AdminContractsPage xem toan bo hop dong he thong.
+  const response = await apiClient.get('/api/contracts/admin', authConfig())
+  return response.data
+}
+
+export async function getAdminContractById(contractId) {
+  const response = await apiClient.get(`/api/contracts/admin/${contractId}`, authConfig())
+  return response.data
+}

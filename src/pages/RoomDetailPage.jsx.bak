@@ -1,0 +1,1075 @@
+// Trang RoomDetailPage la man chi tiet phong trung tam cua nghiep vu.
+// Muc dich:
+// - Tai thong tin phong + reviews
+// - Cho user tao booking thue hoac dat lich xem
+// - Mo QR thanh toan coc
+// - De lai danh gia
+// - Bam nhanh sang trang nhan tin voi chu tro
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { createBookingRequest, getMyBookingRequests, upsertBookingReview } from '../api/bookingApi'
+import { createVietQrPayment, getPaymentByCode } from '../api/paymentApi'
+import { getRoomById, getRoomReviews } from '../api/rentalApi'
+import PaymentQrModal from '../components/PaymentQrModal'
+import { getStoredAuth } from '../utils/auth'
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatGenderAllowed,
+  getRoomThumbnail,
+} from '../utils/rentalFormat'
+
+const defaultRentForm = {
+  moveInDate: '',
+  monthsToRent: '1',
+  message: '',
+}
+
+const defaultVisitForm = {
+  appointmentAt: '',
+  message: '',
+}
+
+const defaultReviewForm = {
+  rating: 0,
+  comment: '',
+}
+
+function formatRequestTypeLabel(value) {
+  return value === 'schedule_visit' ? 'Đặt lịch xem phòng' : 'Yêu cầu thuê phòng'
+}
+
+function formatBookingStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đang chờ xử lý'
+  if (normalized === 'waiting_payment') return 'Chờ thanh toán'
+  if (normalized === 'paid') return 'Đã thanh toán'
+  if (normalized === 'confirmed') return 'Đã xác nhận'
+  if (normalized === 'rejected') return 'Đã từ chối'
+  if (normalized === 'canceled') return 'Đã hủy'
+  if (normalized === 'expired') return 'Hết hạn'
+  return value || '---'
+}
+
+function formatRoomStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'available') return 'Còn trống'
+  if (normalized === 'reserved') return 'Đã giữ chỗ'
+  if (normalized === 'rented') return 'Đã thuê'
+  if (normalized === 'hidden') return 'Đã ẩn'
+  if (normalized === 'active') return 'Đang hiển thị'
+  if (normalized === 'inactive') return 'Ngưng hiển thị'
+  return value || '---'
+}
+
+function isPayableRentBooking(booking) {
+  // Chi booking thue phong moi co luong thanh toan coc.
+  const normalizedStatus = String(booking?.status || '').toLowerCase()
+  return String(booking?.requestType || '').toLowerCase() === 'rent'
+    && ['pending', 'waiting_payment', 'paid'].includes(normalizedStatus)
+}
+
+function getPaymentActionLabel(booking) {
+  const normalizedStatus = String(booking?.status || '').toLowerCase()
+  if (normalizedStatus === 'waiting_payment') return 'Mở mã QR'
+  if (normalizedStatus === 'paid') return 'Xem thanh toán'
+  return 'Thanh toán cọc'
+}
+
+function getPaymentHintLabel(booking) {
+  const normalizedStatus = String(booking?.status || '').toLowerCase()
+  if (normalizedStatus === 'waiting_payment') return 'Bạn đã có mã QR chờ thanh toán cho booking này.'
+  if (normalizedStatus === 'paid') return 'Hệ thống đã ghi nhận cọc. Booking đang chờ chủ trọ xác nhận.'
+  return 'Bạn có thể thanh toán cọc ngay để chủ trọ xử lý booking nhanh hơn.'
+}
+
+function getMinDateInput() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getMinDateTimeInput() {
+  const date = new Date(Date.now() + 30 * 60 * 1000)
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+function formatRatingValue(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return null
+  return numericValue.toFixed(1)
+}
+
+function renderStars(value, options = {}) {
+  const { size = 'md', dimWhenEmpty = false } = options
+  const filledStars = Math.max(0, Math.min(5, Math.round(Number(value) || 0)))
+
+  return (
+    <div className={`rating-stars ${size}${dimWhenEmpty ? ' dim' : ''}`} aria-hidden="true">
+      {Array.from({ length: 5 }, (_, index) => (
+        <span key={index} className={index < filledStars ? 'active' : ''}>★</span>
+      ))}
+    </div>
+  )
+}
+
+function RatingBadge({ label, value, count }) {
+  const ratingLabel = formatRatingValue(value)
+  const reviewCount = Number(count || 0)
+
+  return (
+    <div className="rating-badge">
+      <span className="rating-badge-label">{label}</span>
+      {ratingLabel ? (
+        <>
+          <div className="rating-badge-main">
+            {renderStars(value, { size: 'sm' })}
+            <strong>{ratingLabel}/5</strong>
+          </div>
+          <span className="rating-badge-meta">{reviewCount} đánh giá</span>
+        </>
+      ) : (
+        <>
+          {renderStars(0, { size: 'sm', dimWhenEmpty: true })}
+          <span className="rating-badge-meta">Chưa có đánh giá</span>
+        </>
+      )}
+    </div>
+  )
+}
+
+export default function RoomDetailPage() {
+  const { roomId } = useParams()
+  const auth = useMemo(() => getStoredAuth(), [])
+  const [room, setRoom] = useState(null)
+  const [reviews, setReviews] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsError, setReviewsError] = useState('')
+  const [activeImage, setActiveImage] = useState('')
+  const [activeBookingTab, setActiveBookingTab] = useState('rent')
+  const [rentForm, setRentForm] = useState(defaultRentForm)
+  const [visitForm, setVisitForm] = useState(defaultVisitForm)
+  const [myBookings, setMyBookings] = useState([])
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookingHistoryLoading, setBookingHistoryLoading] = useState(false)
+  const [bookingError, setBookingError] = useState('')
+  const [bookingSuccess, setBookingSuccess] = useState('')
+  const [reviewForm, setReviewForm] = useState(defaultReviewForm)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [reviewError, setReviewError] = useState('')
+  const [reviewSuccess, setReviewSuccess] = useState('')
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [paymentOpeningId, setPaymentOpeningId] = useState(0)
+  const [paymentRefreshing, setPaymentRefreshing] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const loadRoom = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const data = await getRoomById(roomId)
+        setRoom(data)
+        setActiveImage(getRoomThumbnail(data))
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải chi tiết phòng.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadRoom()
+  }, [roomId])
+
+  useEffect(() => {
+    setSelectedPayment(null)
+    setPaymentError('')
+    setPaymentRefreshing(false)
+    setPaymentOpeningId(0)
+  }, [roomId])
+
+  useEffect(() => {
+    const loadReviews = async () => {
+      setReviewsLoading(true)
+      setReviewsError('')
+
+      try {
+        const data = await getRoomReviews(roomId)
+        setReviews(Array.isArray(data) ? data : [])
+      } catch (err) {
+        setReviews([])
+        setReviewsError(err?.response?.data?.message || 'Chưa thể tải đánh giá lúc này.')
+      } finally {
+        setReviewsLoading(false)
+      }
+    }
+
+    loadReviews()
+  }, [roomId])
+
+  useEffect(() => {
+    const loadMyBookings = async () => {
+      if (!auth.isLoggedIn || !room || Number(auth.user?.id || 0) === Number(room.landlordId)) {
+        setMyBookings([])
+        setBookingHistoryLoading(false)
+        return
+      }
+
+      setBookingHistoryLoading(true)
+
+      try {
+        const data = await getMyBookingRequests({ roomId: room.id })
+        setMyBookings(data)
+      } catch {
+        setMyBookings([])
+      } finally {
+        setBookingHistoryLoading(false)
+      }
+    }
+
+    loadMyBookings()
+  }, [auth.isLoggedIn, auth.user?.id, room])
+
+  const currentUserReview = reviews.find((review) => Number(review.tenantId) === Number(auth.user?.id || 0))
+  const confirmedRentBookings = myBookings
+    .filter((booking) => String(booking.requestType).toLowerCase() === 'rent' && String(booking.status).toLowerCase() === 'confirmed')
+    .sort((firstBooking, secondBooking) => {
+      const firstTime = new Date(firstBooking.confirmedAt || firstBooking.requestedAt || firstBooking.createdAt || 0).getTime()
+      const secondTime = new Date(secondBooking.confirmedAt || secondBooking.requestedAt || secondBooking.createdAt || 0).getTime()
+      return secondTime - firstTime
+    })
+  const reviewTargetBooking = currentUserReview
+    ? confirmedRentBookings.find((booking) => Number(booking.id) === Number(currentUserReview.bookingRequestId)) || confirmedRentBookings[0] || null
+    : confirmedRentBookings[0] || null
+
+  useEffect(() => {
+    if (currentUserReview) {
+      setReviewForm({
+        rating: Number(currentUserReview.rating || 0),
+        comment: currentUserReview.comment || '',
+      })
+      return
+    }
+
+    setReviewForm(defaultReviewForm)
+  }, [currentUserReview])
+
+  useEffect(() => {
+    const paymentCode = selectedPayment?.paymentCode
+    const normalizedStatus = String(selectedPayment?.status || '').toLowerCase()
+
+    if (!paymentCode || (normalizedStatus !== 'pending' && normalizedStatus !== 'waiting_confirm')) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const latestPayment = await getPaymentByCode(paymentCode)
+        setSelectedPayment(latestPayment)
+        setMyBookings((prev) => prev.map((booking) => (
+          Number(booking.id) === Number(latestPayment.bookingRequestId)
+            ? { ...booking, status: latestPayment.bookingStatus || booking.status }
+            : booking
+        )))
+      } catch {
+        // Bo qua loi polling de tranh lam giat UI; nguoi dung van co the bam refresh thu cong.
+      }
+    }, 10000)
+
+    return () => window.clearInterval(intervalId)
+  }, [selectedPayment?.paymentCode, selectedPayment?.status])
+
+  const backLink = auth.isLoggedIn ? '/user/rooms' : '/'
+
+  if (loading) {
+    return (
+      <div className="room-detail-page">
+        <div className="dashboard-container">
+          <div className="dashboard-panel">
+            <div className="dashboard-empty">Đang tải chi tiết phòng...</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !room) {
+    return (
+      <div className="room-detail-page">
+        <div className="dashboard-container">
+          <div className="dashboard-panel">
+            <div className="alert error">{error || 'Không tìm thấy phòng.'}</div>
+            <div className="form-actions">
+              <Link to={backLink} className="ghost-button card-link-button">
+                Quay lại
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const amenities = room.amenities || []
+  const galleryImages = room.images?.length > 0
+    ? room.images.map((image, index) => ({
+      ...image,
+      id: image.id || `room-image-${index}`,
+      imageUrl: image.imageUrl || '',
+    }))
+    : [{ imageUrl: getRoomThumbnail(room) || '', id: 'placeholder' }]
+  const heroImage = activeImage || galleryImages.find((image) => image.imageUrl)?.imageUrl || getRoomThumbnail(room)
+  const activeImageIndex = Math.max(galleryImages.findIndex((image) => image.imageUrl === heroImage), 0)
+  const isOwner = Number(auth.user?.id || 0) === Number(room.landlordId)
+  const canCreateBooking = auth.isLoggedIn && !isOwner && String(room.status).toLowerCase() === 'available'
+  const minDate = getMinDateInput()
+  const minDateTime = getMinDateTimeInput()
+  const roomRatingLabel = formatRatingValue(room?.roomAverageRating)
+  const landlordRatingLabel = formatRatingValue(room?.landlordAverageRating)
+  const canReviewRoom = auth.isLoggedIn && !isOwner && Boolean(reviewTargetBooking)
+  const hasDepositPayment = Number(room.depositAmount || 0) > 0
+  const heroOverviewItems = [
+    { label: 'Giá thuê', value: `${formatCurrency(room.price)} đ/tháng` },
+    { label: 'Diện tích', value: `${room.area} m²` },
+    { label: 'Sức chứa', value: `${room.maxTenants} người` },
+    { label: 'Sẵn từ', value: formatDate(room.availableFrom) },
+  ]
+  const quickInfoItems = [
+    { label: 'Loại phòng', value: room.roomType || 'Chưa cập nhật' },
+    { label: 'Đối tượng phù hợp', value: formatGenderAllowed(room.genderAllowed) },
+    { label: 'Nội thất', value: room.furnished ? 'Có nội thất' : 'Nội thất cơ bản / chưa cập nhật' },
+    { label: 'Tiền cọc', value: `${formatCurrency(room.depositAmount)} đ` },
+    { label: 'Điện nước', value: `${formatCurrency(room.electricPrice)} đ điện • ${formatCurrency(room.waterPrice)} đ nước` },
+    { label: 'Dịch vụ', value: `${formatCurrency(room.servicePrice)} đ` },
+  ]
+
+  const submitBooking = async (requestType, event) => {
+    event.preventDefault()
+    setBookingLoading(true)
+    setBookingError('')
+    setBookingSuccess('')
+
+    const isRentRequest = requestType === 'rent'
+    const payload = isRentRequest
+      ? {
+        roomId: room.id,
+        requestType,
+        moveInDate: rentForm.moveInDate || null,
+        monthsToRent: Number(rentForm.monthsToRent || 1),
+        message: rentForm.message || null,
+      }
+      : {
+        roomId: room.id,
+        requestType,
+        appointmentAt: visitForm.appointmentAt ? new Date(visitForm.appointmentAt).toISOString() : null,
+        message: visitForm.message || null,
+      }
+
+    try {
+      const createdBooking = await createBookingRequest(payload)
+      setMyBookings((prev) => [createdBooking, ...prev])
+      setBookingSuccess(
+        isRentRequest
+          ? hasDepositPayment
+            ? 'Đã gửi yêu cầu thuê phòng. Bạn có thể thanh toán cọc ngay trong mục yêu cầu của bạn.'
+            : 'Đã gửi yêu cầu thuê phòng. Chủ trọ sẽ phản hồi sớm.'
+          : 'Đã gửi yêu cầu đặt lịch xem phòng. Chủ trọ sẽ phản hồi sớm.',
+      )
+
+      if (isRentRequest) {
+        setRentForm(defaultRentForm)
+      } else {
+        setVisitForm(defaultVisitForm)
+      }
+    } catch (err) {
+      setBookingError(err?.response?.data?.message || 'Không thể gửi yêu cầu lúc này.')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
+
+  const submitReview = async (event) => {
+    event.preventDefault()
+
+    if (!reviewTargetBooking) {
+      setReviewError('Bạn chưa có lượt thuê đã xác nhận để đánh giá phòng này.')
+      setReviewSuccess('')
+      return
+    }
+
+    setReviewLoading(true)
+    setReviewError('')
+    setReviewSuccess('')
+
+    try {
+      const savedReview = await upsertBookingReview(reviewTargetBooking.id, {
+        rating: Number(reviewForm.rating || 0),
+        comment: reviewForm.comment || null,
+      })
+
+      setReviews((prev) => {
+        const nextReviews = prev.filter((review) => Number(review.id) !== Number(savedReview.id))
+        return [savedReview, ...nextReviews]
+      })
+
+      setReviewForm({
+        rating: Number(savedReview.rating || 0),
+        comment: savedReview.comment || '',
+      })
+      setReviewSuccess(currentUserReview ? 'Đã cập nhật đánh giá của bạn.' : 'Đã gửi đánh giá thành công.')
+    } catch (err) {
+      setReviewError(err?.response?.data?.message || 'Không thể gửi đánh giá lúc này.')
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  const syncBookingStatusFromPayment = (payment) => {
+    if (!payment?.bookingRequestId) return
+
+    setMyBookings((prev) => prev.map((booking) => (
+      Number(booking.id) === Number(payment.bookingRequestId)
+        ? { ...booking, status: payment.bookingStatus || booking.status }
+        : booking
+    )))
+  }
+
+  const openPaymentForBooking = async (booking) => {
+    if (!booking) return
+
+    setPaymentOpeningId(booking.id)
+    setPaymentError('')
+    setSelectedPayment(null)
+
+    try {
+      const payment = await createVietQrPayment({
+        bookingRequestId: booking.id,
+        paymentType: 'deposit',
+      })
+
+      setSelectedPayment(payment)
+      syncBookingStatusFromPayment(payment)
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể mở mã thanh toán QR lúc này.')
+    } finally {
+      setPaymentOpeningId(0)
+    }
+  }
+
+  const refreshSelectedPayment = async () => {
+    if (!selectedPayment?.paymentCode) return
+
+    setPaymentRefreshing(true)
+    setPaymentError('')
+
+    try {
+      const payment = await getPaymentByCode(selectedPayment.paymentCode)
+      setSelectedPayment(payment)
+      syncBookingStatusFromPayment(payment)
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể kiểm tra trạng thái thanh toán lúc này.')
+    } finally {
+      setPaymentRefreshing(false)
+    }
+  }
+
+  const closePaymentModal = () => {
+    setSelectedPayment(null)
+    setPaymentRefreshing(false)
+    setPaymentError('')
+  }
+
+  const handlePaymentChanged = (payment) => {
+    setSelectedPayment(payment)
+    syncBookingStatusFromPayment(payment)
+  }
+
+  const handlePaymentDeleted = async () => {
+    setSelectedPayment(null)
+    setPaymentRefreshing(false)
+    setPaymentError('')
+    setBookingSuccess('Đã xóa QR hết hạn. Bạn có thể bấm lại thanh toán cọc để tạo mã mới.')
+  }
+
+  return (
+    <div className="room-detail-page">
+      <div className="dashboard-container room-detail-container">
+        <section className="dashboard-hero room-detail-hero">
+          <span className="dashboard-eyebrow">Chi tiết phòng</span>
+          <h1>{room.title}</h1>
+          <p>{room.fullAddress}</p>
+
+          <div className="detail-hero-overview">
+            {heroOverviewItems.map((item) => (
+              <div key={item.label} className="detail-hero-overview-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="detail-rating-strip">
+            <RatingBadge
+              label="Điểm bài đăng"
+              value={room.roomAverageRating}
+              count={room.roomReviewCount}
+            />
+            <RatingBadge
+              label="Uy tín chủ trọ"
+              value={room.landlordAverageRating}
+              count={room.landlordReviewCount}
+            />
+          </div>
+
+          <div className="inline-actions">
+            <Link to={backLink} className="ghost-button card-link-button">
+              {auth.isLoggedIn ? 'Quay lại trang tìm phòng' : 'Về trang công khai'}
+            </Link>
+            {!auth.isLoggedIn && (
+              <Link to="/login" className="primary-button card-link-button">
+                Đăng nhập để tìm nhiều hơn
+              </Link>
+            )}
+          </div>
+        </section>
+
+        <div className="room-detail-layout">
+          <div className="room-detail-main-column">
+            <section className="dashboard-panel room-detail-gallery-panel">
+              <div className="detail-main-image">
+                {heroImage ? (
+                  <>
+                    <img src={heroImage} alt={room.title} />
+                    <span className="detail-image-badge">
+                      Ảnh {activeImageIndex + 1}/{galleryImages.length}
+                    </span>
+                  </>
+                ) : (
+                  <div className="room-placeholder">Không có ảnh</div>
+                )}
+              </div>
+
+              <div className="detail-thumb-grid">
+                {galleryImages.map((image, index) => {
+                  const imageUrl = image.imageUrl || ''
+                  const isActive = imageUrl === heroImage || (!imageUrl && !heroImage && index === 0)
+
+                  return (
+                    <button
+                      key={image.id || `${imageUrl}-${index}`}
+                      type="button"
+                      className={`detail-thumb${isActive ? ' active' : ''}`}
+                      onClick={() => setActiveImage(imageUrl)}
+                      aria-pressed={isActive}
+                      aria-label={`Xem ảnh ${index + 1}`}
+                    >
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={`${room.title} ${index + 1}`} />
+                      ) : (
+                        <span>Không có ảnh</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="dashboard-panel detail-quick-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Tóm tắt nhanh</h2>
+                  <p>Những thông tin quan trọng nhất để người thuê có thể quyết định nhanh hơn.</p>
+                </div>
+              </div>
+
+              <div className="detail-quick-grid">
+                {quickInfoItems.map((item) => (
+                  <article key={item.label} className="detail-quick-card">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <div className="detail-info-grid">
+              <section className="dashboard-panel detail-section-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Mô tả và nội thất</h2>
+                    <p>Thông tin người xem có thể tham khảo trước khi đăng nhập.</p>
+                  </div>
+                </div>
+
+                <div className="stack-list">
+                  <div className="stack-card detail-content-card">
+                    <h3>Mô tả</h3>
+                    <p className="stack-note">{room.description || 'Chưa có mô tả chi tiết.'}</p>
+                  </div>
+
+                  <div className="stack-card detail-content-card">
+                    <h3>Nội thất</h3>
+                    <p className="stack-note">{room.furnishingDetail || (room.furnished ? 'Có nội thất' : 'Không có mô tả nội thất')}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="dashboard-panel detail-section-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Địa chỉ và tiện ích</h2>
+                    <p>Đầy đủ thông tin để sau này có thể nối thêm bản đồ hoặc tính năng thuê.</p>
+                  </div>
+                </div>
+
+                <div className="stack-list">
+                  <div className="stack-card detail-content-card">
+                    <h3>Địa chỉ</h3>
+                    <p className="stack-note">{room.fullAddress}</p>
+                    <div className="metric-row">
+                      <span>{room.wardName}</span>
+                      <span>{room.districtName}</span>
+                      <span>{room.provinceName}</span>
+                    </div>
+                  </div>
+
+                  <div className="stack-card detail-content-card">
+                    <h3>Tiện ích</h3>
+                    <div className="tag-row">
+                      {amenities.length === 0 ? (
+                        <span className="mini-tag">Chưa có tiện ích</span>
+                      ) : (
+                        amenities.map((amenity) => (
+                          <span key={amenity.id} className="mini-tag">{amenity.name}</span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="stack-card detail-content-card">
+                    <h3>Cập nhật</h3>
+                    <p className="stack-note">Tạo lúc: {formatDateTime(room.createdAt)}</p>
+                    <p className="stack-note">Cập nhật lúc: {formatDateTime(room.updatedAt)}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <aside className="dashboard-panel room-detail-sidebar">
+            <div className="detail-price-card">
+              <span className="detail-price-kicker">Mức giá thuê</span>
+              <div className="detail-price-row">
+                <div className="detail-price">{formatCurrency(room.price)} đ/tháng</div>
+                <span className={`status-pill ${room.status}`}>{formatRoomStatusLabel(room.status)}</span>
+              </div>
+              <p className="detail-price-note">
+                {room.propertyName || 'Khu trọ đang cập nhật'} • {room.roomType || 'Phòng cho thuê'}
+              </p>
+            </div>
+
+            <div className="detail-rating-card">
+              <div className="detail-rating-card-head">
+                <span>Đánh giá bài đăng</span>
+                <strong>{roomRatingLabel ? `${roomRatingLabel}/5` : 'Mới đăng'}</strong>
+              </div>
+              {renderStars(room.roomAverageRating, { dimWhenEmpty: !roomRatingLabel })}
+              <p className="stack-note">
+                {roomRatingLabel
+                  ? `${room.roomReviewCount} người thuê đã đánh giá phòng này.`
+                  : 'Phòng này chưa có lượt đánh giá nào từ người thuê.'}
+              </p>
+              <div className="detail-rating-meta">
+                <span>Uy tín chủ trọ</span>
+                <strong>{landlordRatingLabel ? `${landlordRatingLabel}/5` : 'Chưa có dữ liệu'}</strong>
+              </div>
+              <p className="stack-note">
+                {landlordRatingLabel
+                  ? `${room.landlordReviewCount} lượt đánh giá trên các bài đăng của chủ trọ này.`
+                  : 'Chủ trọ này chưa có đánh giá công khai nào.'}
+              </p>
+            </div>
+
+            <div className="detail-summary-grid">
+              <div className="detail-summary-item">
+                <span>Diện tích</span>
+                <strong>{room.area} m²</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Tối đa</span>
+                <strong>{room.maxTenants} người</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Đối tượng</span>
+                <strong>{formatGenderAllowed(room.genderAllowed)}</strong>
+              </div>
+              <div className="detail-summary-item">
+                <span>Sẵn từ</span>
+                <strong>{formatDate(room.availableFrom)}</strong>
+              </div>
+            </div>
+
+            <div className="status-box detail-meta-card">
+              <div className="detail-meta-row">
+                <strong>Khu trọ</strong>
+                <span>{room.propertyName || 'Chưa cập nhật'}</span>
+              </div>
+              <div className="detail-meta-row">
+                <strong>Loại phòng</strong>
+                <span>{room.roomType || 'Chưa cập nhật'}</span>
+              </div>
+              <div className="detail-meta-row">
+                <strong>Trạng thái</strong>
+                <span className={`status-pill ${room.status}`}>{formatRoomStatusLabel(room.status)}</span>
+              </div>
+            </div>
+
+            <div className="status-box detail-meta-card detail-cost-card">
+              <div className="detail-meta-row">
+                <strong>Tiền cọc</strong>
+                <span>{formatCurrency(room.depositAmount)} đ</span>
+              </div>
+              <div className="detail-meta-row">
+                <strong>Điện</strong>
+                <span>{formatCurrency(room.electricPrice)} đ</span>
+              </div>
+              <div className="detail-meta-row">
+                <strong>Nước</strong>
+                <span>{formatCurrency(room.waterPrice)} đ</span>
+              </div>
+              <div className="detail-meta-row">
+                <strong>Dịch vụ</strong>
+                <span>{formatCurrency(room.servicePrice)} đ</span>
+              </div>
+            </div>
+
+            {auth.isLoggedIn && !isOwner && (
+              <div className="detail-action-card">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Trao đổi với chủ trọ</h2>
+                    <p>Nhắn tin trực tiếp để hỏi thêm về phòng, lịch xem hoặc điều kiện thuê.</p>
+                  </div>
+                </div>
+
+                {/* Query string userId giup MessagesPage mo dung thread cua chu tro ngay lap tuc. */}
+                <Link to={`/messages?userId=${room.landlordId}`} className="primary-button card-link-button">
+                  Nhắn tin chủ trọ
+                </Link>
+              </div>
+            )}
+
+            <div className="detail-action-card">
+              <div className="panel-heading compact">
+                <div>
+                  <h2>Thuê hoặc đặt lịch</h2>
+                  <p>Người đã có tài khoản có thể gửi yêu cầu trực tiếp từ trang chi tiết này.</p>
+                </div>
+              </div>
+
+              {!auth.isLoggedIn ? (
+                <>
+                  <div className="booking-tab-row">
+                    <button type="button" className="booking-tab" disabled>Thuê ngay</button>
+                    <button type="button" className="booking-tab" disabled>Đặt lịch xem</button>
+                  </div>
+                  <div className="detail-disabled-box">
+                    Bạn chưa đăng nhập nên chỉ xem được thông tin phòng, chưa thể gửi yêu cầu thuê hoặc đặt lịch.
+                  </div>
+                  <Link to="/login" className="primary-button card-link-button">
+                    Đăng nhập để thao tác
+                  </Link>
+                </>
+              ) : isOwner ? (
+                <div className="detail-disabled-box">
+                  Đây là phòng do chính bạn đăng tải, nên bạn không thể gửi yêu cầu thuê hoặc đặt lịch cho phòng này.
+                </div>
+              ) : String(room.status).toLowerCase() !== 'available' ? (
+                <div className="detail-disabled-box">
+                  Phòng hiện không ở trạng thái nhận yêu cầu mới. Bạn có thể theo dõi thêm hoặc liên hệ chủ trọ sau.
+                </div>
+              ) : (
+                <>
+                  <div className="booking-tab-row">
+                    <button
+                      type="button"
+                      className={`booking-tab${activeBookingTab === 'rent' ? ' active' : ''}`}
+                      onClick={() => {
+                        setActiveBookingTab('rent')
+                        setBookingError('')
+                        setBookingSuccess('')
+                      }}
+                    >
+                      Thuê ngay
+                    </button>
+                    <button
+                      type="button"
+                      className={`booking-tab${activeBookingTab === 'schedule_visit' ? ' active' : ''}`}
+                      onClick={() => {
+                        setActiveBookingTab('schedule_visit')
+                        setBookingError('')
+                        setBookingSuccess('')
+                      }}
+                    >
+                      Đặt lịch xem
+                    </button>
+                  </div>
+
+                  {bookingError && <div className="alert error booking-alert">{bookingError}</div>}
+                  {bookingSuccess && <div className="alert success booking-alert">{bookingSuccess}</div>}
+
+                  {activeBookingTab === 'rent' ? (
+                    <form className="dashboard-form booking-form" onSubmit={(event) => submitBooking('rent', event)}>
+                      <div className="form-grid two-cols">
+                        <label className="form-field">
+                          <span>Ngày dự kiến vào ở</span>
+                          <input
+                            type="date"
+                            min={minDate}
+                            value={rentForm.moveInDate}
+                            onChange={(event) => setRentForm((prev) => ({ ...prev, moveInDate: event.target.value }))}
+                            required
+                          />
+                        </label>
+
+                        <label className="form-field">
+                          <span>Số tháng thuê</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="36"
+                            value={rentForm.monthsToRent}
+                            onChange={(event) => setRentForm((prev) => ({ ...prev, monthsToRent: event.target.value }))}
+                            required
+                          />
+                        </label>
+                      </div>
+
+                      <label className="form-field">
+                        <span>Lời nhắn cho chủ trọ</span>
+                        <textarea
+                          value={rentForm.message}
+                          onChange={(event) => setRentForm((prev) => ({ ...prev, message: event.target.value }))}
+                          placeholder="Ví dụ: Tôi muốn vào ở đầu tháng sau, nhờ chủ trọ liên hệ giúp."
+                        />
+                      </label>
+
+                      <button type="submit" className="primary-button" disabled={bookingLoading || !canCreateBooking}>
+                        {bookingLoading ? 'Đang gửi...' : 'Gửi yêu cầu thuê'}
+                      </button>
+                    </form>
+                  ) : (
+                    <form className="dashboard-form booking-form" onSubmit={(event) => submitBooking('schedule_visit', event)}>
+                      <label className="form-field">
+                        <span>Thời gian muốn xem phòng</span>
+                        <input
+                          type="datetime-local"
+                          min={minDateTime}
+                          value={visitForm.appointmentAt}
+                          onChange={(event) => setVisitForm((prev) => ({ ...prev, appointmentAt: event.target.value }))}
+                          required
+                        />
+                      </label>
+
+                      <label className="form-field">
+                        <span>Lời nhắn cho chủ trọ</span>
+                        <textarea
+                          value={visitForm.message}
+                          onChange={(event) => setVisitForm((prev) => ({ ...prev, message: event.target.value }))}
+                          placeholder="Ví dụ: Tôi rảnh buổi tối hoặc cuối tuần, nhờ chủ trọ xác nhận lịch giúp."
+                        />
+                      </label>
+
+                      <button type="submit" className="primary-button" disabled={bookingLoading || !canCreateBooking}>
+                        {bookingLoading ? 'Đang gửi...' : 'Gửi lịch hẹn'}
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
+            </div>
+
+            {auth.isLoggedIn && !isOwner && (
+              <div className="detail-action-card">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Yêu cầu của bạn</h2>
+                    <p>Các yêu cầu bạn đã gửi cho riêng phòng này.</p>
+                  </div>
+                </div>
+
+                {bookingHistoryLoading ? (
+                  <div className="dashboard-empty">Đang tải lịch sử yêu cầu...</div>
+                ) : myBookings.length === 0 ? (
+                  <div className="detail-disabled-box">
+                    Bạn chưa gửi yêu cầu nào cho phòng này.
+                  </div>
+                ) : (
+                  <>
+                    {paymentError && !selectedPayment && <div className="alert error booking-alert">{paymentError}</div>}
+
+                    <div className="booking-history-list">
+                    {myBookings.map((booking) => (
+                      <article key={booking.id} className="booking-history-card">
+                        <div className="booking-history-top">
+                          <strong>{formatRequestTypeLabel(booking.requestType)}</strong>
+                          <span className={`status-pill ${booking.status}`}>{formatBookingStatusLabel(booking.status)}</span>
+                        </div>
+                        <div className="booking-code">Mã yêu cầu: {booking.bookingCode}</div>
+                        {booking.moveInDate && <p className="stack-note">Ngày vào ở: {formatDate(booking.moveInDate)}</p>}
+                        {booking.appointmentAt && <p className="stack-note">Lịch xem phòng: {formatDateTime(booking.appointmentAt)}</p>}
+                        {booking.message && <p className="stack-note">Lời nhắn: {booking.message}</p>}
+                        <p className="stack-note">Gửi lúc: {formatDateTime(booking.requestedAt)}</p>
+
+                        {String(booking.requestType).toLowerCase() === 'rent' && (
+                          <div className="booking-payment-box">
+                            <p className="stack-note booking-payment-note">
+                              {hasDepositPayment
+                                ? `Tiền cọc cho phòng này: ${formatCurrency(room.depositAmount)} đ. ${getPaymentHintLabel(booking)}`
+                                : 'Phòng này hiện chưa cấu hình tiền cọc để thanh toán QR.'}
+                            </p>
+
+                            {hasDepositPayment && isPayableRentBooking(booking) && (
+                              <div className="inline-actions booking-payment-actions">
+                                <button
+                                  type="button"
+                                  className={String(booking.status).toLowerCase() === 'paid' ? 'ghost-button' : 'primary-button'}
+                                  disabled={paymentOpeningId === booking.id}
+                                  onClick={() => openPaymentForBooking(booking)}
+                                >
+                                  {paymentOpeningId === booking.id ? 'Đang mở QR...' : getPaymentActionLabel(booking)}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {auth.isLoggedIn && !isOwner && (
+              <div className="detail-action-card">
+                <div className="panel-heading compact">
+                  <div>
+                    <h2>Đánh giá của bạn</h2>
+                    <p>Người thuê đã được xác nhận có thể chấm sao trực tiếp ngay tại đây.</p>
+                  </div>
+                </div>
+
+                {!canReviewRoom ? (
+                  <div className="detail-disabled-box">
+                    Bạn cần có ít nhất 1 yêu cầu thuê phòng đã được xác nhận thì mới có thể đánh giá bài đăng này.
+                  </div>
+                ) : (
+                  <form className="dashboard-form review-form" onSubmit={submitReview}>
+                    <div className="review-star-picker">
+                      {Array.from({ length: 5 }, (_, index) => {
+                        const starValue = index + 1
+                        const isActive = Number(reviewForm.rating) >= starValue
+
+                        return (
+                          <button
+                            key={starValue}
+                            type="button"
+                            className={`review-star-button${isActive ? ' active' : ''}`}
+                            onClick={() => setReviewForm((prev) => ({ ...prev, rating: starValue }))}
+                            aria-label={`${starValue} sao`}
+                          >
+                            ★
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <div className="review-form-hint">
+                      {reviewForm.rating > 0
+                        ? `Bạn đang chọn ${reviewForm.rating}/5 sao.`
+                        : 'Chọn số sao bạn muốn đánh giá.'}
+                    </div>
+
+                    {reviewError && <div className="alert error booking-alert">{reviewError}</div>}
+                    {reviewSuccess && <div className="alert success booking-alert">{reviewSuccess}</div>}
+
+                    <label className="form-field">
+                      <span>Nhận xét của bạn</span>
+                      <textarea
+                        value={reviewForm.comment}
+                        onChange={(event) => setReviewForm((prev) => ({ ...prev, comment: event.target.value }))}
+                        placeholder="Ví dụ: Chủ trọ phản hồi nhanh, phòng đúng mô tả, khu vực yên tĩnh."
+                      />
+                    </label>
+
+                    <button type="submit" className="primary-button" disabled={reviewLoading || Number(reviewForm.rating || 0) <= 0}>
+                      {reviewLoading
+                        ? 'Đang lưu đánh giá...'
+                        : currentUserReview
+                          ? 'Cập nhật đánh giá'
+                          : 'Gửi đánh giá'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Đánh giá từ người thuê</h2>
+              <p>Phản hồi thực tế từ những người đã gửi yêu cầu thuê và được xác nhận.</p>
+            </div>
+          </div>
+
+          {reviewsLoading ? (
+            <div className="dashboard-empty">Đang tải đánh giá...</div>
+          ) : reviewsError ? (
+            <div className="detail-disabled-box">{reviewsError}</div>
+          ) : reviews.length === 0 ? (
+            <div className="detail-disabled-box">
+              Chưa có đánh giá nào cho phòng này. Khi có người thuê đánh giá, phần sao và nhận xét sẽ hiển thị ở đây.
+            </div>
+          ) : (
+            <div className="review-list">
+              {reviews.map((review) => (
+                <article key={review.id} className="review-card">
+                  <div className="review-card-top">
+                    <div>
+                      <strong>{review.tenantName || 'Người thuê'}</strong>
+                      <p className="stack-note">Đánh giá lúc {formatDateTime(review.updatedAt || review.createdAt)}</p>
+                    </div>
+                    <div className="review-score-box">
+                      {renderStars(review.rating, { size: 'sm' })}
+                      <span>{review.rating}/5</span>
+                    </div>
+                  </div>
+
+                  <p className="review-comment">{review.comment || 'Người thuê hài lòng và để lại đánh giá sao.'}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {selectedPayment && (
+        <PaymentQrModal
+          payment={selectedPayment}
+          onClose={closePaymentModal}
+          onRefresh={refreshSelectedPayment}
+          refreshing={paymentRefreshing}
+          error={paymentError}
+          onPaymentChanged={handlePaymentChanged}
+          onPaymentDeleted={handlePaymentDeleted}
+        />
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,44 @@
+// auth.js la noi tap trung cac helper doc trang thai dang nhap tu localStorage.
+// Nhieu page khong goi API auth lai, ma doc token/user tu day de quyet dinh
+// route mac dinh, menu header va role hien tai.
+export function getStoredUser() {
+  const userStr = localStorage.getItem('user')
+  if (!userStr) return null
+
+  try {
+    return JSON.parse(userStr)
+  } catch {
+    return null
+  }
+}
+
+export function getStoredAuth() {
+  // Token duoc backend cap khi login thanh cong.
+  const token = localStorage.getItem('token')
+  const user = getStoredUser()
+
+  return {
+    token,
+    user,
+    isLoggedIn: Boolean(token),
+  }
+}
+
+export function getRoleCode(user) {
+  // Ho tro ca roleCode lan roleName de tranh loi khi du lieu tra ve khac nhau.
+  return (user?.roleCode || user?.roleName || '').toUpperCase()
+}
+
+export function getHomePathForUser(user) {
+  // Day la helper dinh tuyen nhanh den dashboard dung theo role.
+  const roleCode = getRoleCode(user)
+
+  if (roleCode === 'ADMIN') return '/admin'
+  if (roleCode === 'LANDLORD') return '/landlord'
+  return '/user'
+}
+
+export function getDefaultRoute(isLoggedIn, user) {
+  // App.jsx, Header.jsx va nhieu page dung helper nay de redirect sau login.
+  return isLoggedIn ? getHomePathForUser(user) : '/'
+}

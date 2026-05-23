@@ -1,0 +1,39 @@
+import apiClient from './apiClient'
+
+// landlordApplicationApi: gom API nop/duyet ho so landlord.
+
+function authConfig() {
+  const token = localStorage.getItem('token')
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
+export async function submitLandlordApplication(payload) {
+  const response = await apiClient.post('/api/landlord-applications/submit', payload, authConfig())
+  return response.data
+}
+
+export async function createLandlordRegistrationFeePayment() {
+  const response = await apiClient.post('/api/landlord-applications/registration-fee', {}, authConfig())
+  return response.data
+}
+
+export async function getMyLandlordApplication() {
+  const response = await apiClient.get('/api/landlord-applications/me', authConfig())
+  return response.data
+}
+
+export async function getAdminLandlordApplications(status) {
+  const query = status ? `?status=${status}` : ''
+  const response = await apiClient.get(`/api/landlord-applications/admin${query}`, authConfig())
+  return response.data
+}
+
+export async function getAdminLandlordApplicationById(id) {
+  const response = await apiClient.get(`/api/landlord-applications/admin/${id}`, authConfig())
+  return response.data
+}
+
+export async function reviewLandlordApplication(id, payload) {
+  const response = await apiClient.post(`/api/landlord-applications/admin/${id}/review`, payload, authConfig())
+  return response.data
+}

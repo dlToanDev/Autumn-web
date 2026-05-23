@@ -1,0 +1,458 @@
+// Trang AdminPaymentsPage cho admin xem cac payment gan voi tai khoan he thong.
+// Day la list tong hop de admin theo doi va xac nhan cac khoan can thiet.
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import PaymentQrModal from '../components/PaymentQrModal'
+import { getMyPayments, getPaymentByCode, markAdminPaymentPaid } from '../api/paymentApi'
+import { getStoredUser } from '../utils/auth'
+import { formatCurrency, formatDateTime } from '../utils/rentalFormat'
+
+function formatPaymentStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đang chờ thanh toán'
+  if (normalized === 'waiting_confirm') return 'Chờ admin xác nhận'
+  if (normalized === 'success') return 'Đã xác nhận thanh toán'
+  if (normalized === 'failed') return 'Thanh toán thất bại'
+  if (normalized === 'canceled') return 'Đã hủy'
+  if (normalized === 'expired') return 'QR đã hết hạn'
+  return value || '---'
+}
+
+function formatPaymentTypeLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'deposit') return 'Tiền cọc'
+  if (normalized === 'rent') return 'Tiền thuê'
+  if (normalized === 'service') return 'Phí dịch vụ'
+  if (normalized === 'listing_fee') return 'Hoa hồng chủ trọ'
+  return value || '---'
+}
+
+function isPaidStatus(status) {
+  return String(status || '').toLowerCase() === 'success'
+}
+
+function isIncomingPayment(payment, currentUserId) {
+  return Number(payment?.payeeUserId || 0) === Number(currentUserId || 0)
+}
+
+function isOutgoingPayment(payment, currentUserId) {
+  return Number(payment?.payerId || 0) === Number(currentUserId || 0)
+}
+
+function canConfirmPayment(payment, currentUserId) {
+  return (
+    String(payment?.status || '').toLowerCase() === 'waiting_confirm' &&
+    isIncomingPayment(payment, currentUserId)
+  )
+}
+
+function sumAmount(payments) {
+  return payments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+}
+
+function formatBillingPeriod(payment) {
+  if (payment.billingMonth && payment.billingYear) {
+    return `${String(payment.billingMonth).padStart(2, '0')}/${payment.billingYear}`
+  }
+
+  return payment.bookingCode || '---'
+}
+
+export default function AdminPaymentsPage() {
+  const currentUser = getStoredUser()
+  const currentUserId = currentUser?.id || 0
+  const [payments, setPayments] = useState([])
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [directionFilter, setDirectionFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [openingCode, setOpeningCode] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [confirmingCode, setConfirmingCode] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [paymentError, setPaymentError] = useState('')
+
+  // Danh sach payment goc, sau do page tu tach incoming/outgoing theo current user.
+  const loadPayments = async () => {
+    const data = await getMyPayments()
+    const nextPayments = Array.isArray(data)
+      ? [...data].sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      : []
+
+    setPayments(nextPayments)
+    return nextPayments
+  }
+
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await loadPayments()
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải lịch sử thanh toán của admin.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  useEffect(() => {
+    const paymentCode = selectedPayment?.paymentCode
+    const normalizedStatus = String(selectedPayment?.status || '').toLowerCase()
+
+    if (!paymentCode || (normalizedStatus !== 'pending' && normalizedStatus !== 'waiting_confirm')) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const latestPayment = await getPaymentByCode(paymentCode)
+        setSelectedPayment(latestPayment)
+        setPayments((prev) => prev.map((payment) => (
+          payment.paymentCode === latestPayment.paymentCode ? latestPayment : payment
+        )))
+      } catch {
+        // Cho phép admin tự refresh nếu polling thất bại.
+      }
+    }, 10000)
+
+    return () => window.clearInterval(intervalId)
+  }, [selectedPayment?.paymentCode, selectedPayment?.status])
+
+  const stats = useMemo(() => {
+    const incomingPayments = payments.filter((payment) => isIncomingPayment(payment, currentUserId))
+    const outgoingPayments = payments.filter((payment) => isOutgoingPayment(payment, currentUserId))
+    const paidIncomingPayments = incomingPayments.filter((payment) => isPaidStatus(payment.status))
+    const unpaidIncomingPayments = incomingPayments.filter((payment) => !isPaidStatus(payment.status))
+
+    return {
+      total: payments.length,
+      incomingAmount: sumAmount(paidIncomingPayments),
+      waitingIncomingAmount: sumAmount(unpaidIncomingPayments),
+      outgoingAmount: sumAmount(outgoingPayments.filter((payment) => isPaidStatus(payment.status))),
+      waitingConfirmCount: payments.filter((payment) => String(payment.status).toLowerCase() === 'waiting_confirm').length,
+      paidCount: payments.filter((payment) => isPaidStatus(payment.status)).length,
+    }
+  }, [currentUserId, payments])
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      const status = String(payment.status || '').toLowerCase()
+      const paymentType = String(payment.paymentType || '').toLowerCase()
+
+      if (statusFilter === 'paid' && status !== 'success') return false
+      if (statusFilter === 'unpaid' && status === 'success') return false
+
+      if (directionFilter === 'incoming' && !isIncomingPayment(payment, currentUserId)) return false
+      if (directionFilter === 'outgoing' && !isOutgoingPayment(payment, currentUserId)) return false
+
+      if (typeFilter !== 'all' && paymentType !== typeFilter) return false
+
+      return true
+    })
+  }, [currentUserId, directionFilter, payments, statusFilter, typeFilter])
+
+  const openPayment = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setOpeningCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await getPaymentByCode(paymentCode)
+      setSelectedPayment(payment)
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể mở chi tiết payment.')
+    } finally {
+      setOpeningCode('')
+    }
+  }
+
+  const refreshSelectedPayment = async () => {
+    if (!selectedPayment?.paymentCode) return
+
+    setRefreshing(true)
+    setPaymentError('')
+
+    try {
+      const payment = await getPaymentByCode(selectedPayment.paymentCode)
+      setSelectedPayment(payment)
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+      setMessage('Đã cập nhật trạng thái payment mới nhất.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể cập nhật trạng thái payment.')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const confirmPaymentByCode = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setConfirmingCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await markAdminPaymentPaid(paymentCode)
+      setSelectedPayment((prev) => (
+        prev?.paymentCode === payment.paymentCode ? payment : prev
+      ))
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+      setMessage('Đã xác nhận thanh toán thành công.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể xác nhận payment.')
+    } finally {
+      setConfirmingCode('')
+    }
+  }
+
+  const handlePaymentChanged = (payment) => {
+    setSelectedPayment(payment)
+    setPayments((prev) => prev.map((item) => (
+      item.paymentCode === payment.paymentCode ? payment : item
+    )))
+    setMessage('Đã cập nhật payment mới nhất.')
+  }
+
+  const handlePaymentDeleted = async (payment) => {
+    setPayments((prev) => prev.filter((item) => item.paymentCode !== payment.paymentCode))
+    setSelectedPayment(null)
+    setRefreshing(false)
+    setPaymentError('')
+    setMessage('Đã xóa QR hết hạn khỏi lịch sử thanh toán của admin.')
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải lịch sử thanh toán của admin...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang thanh toán của admin"
+          description={[
+            'Bạn có thể theo dõi các khoản hoa hồng, trạng thái xác nhận và lịch sử payment liên quan đến hệ thống.',
+            'Nếu cần trao đổi nhanh về một giao dịch, hãy mở hộp tin.',
+          ]}
+          action={{ to: '/messages', label: 'Mở hộp tin' }}
+        />
+
+        <div className="inline-actions">
+          <Link to="/admin/commission-payments" className="primary-button card-link-button">
+            Mở thu hoa hồng
+          </Link>
+          <Link to="/admin/payment-settings" className="ghost-button card-link-button">
+            Cấu hình hệ thống
+          </Link>
+        </div>
+
+        <div className="detail-summary-grid user-payment-stats">
+          <div className="detail-summary-item">
+            <span>Tổng payment</span>
+            <strong>{stats.total}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Đã thu</span>
+            <strong>{formatCurrency(stats.incomingAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Chờ xác nhận</span>
+            <strong>{stats.waitingConfirmCount}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Chưa thu xong</span>
+            <strong>{formatCurrency(stats.waitingIncomingAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Đã chi</span>
+            <strong>{formatCurrency(stats.outgoingAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Payment đã xong</span>
+            <strong>{stats.paidCount}</strong>
+          </div>
+        </div>
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+        {paymentError && !selectedPayment && <div className="alert error">{paymentError}</div>}
+
+        <section className="dashboard-panel">
+          <div className="room-toolbar">
+            <div>
+              <h2>Danh sách payment</h2>
+              <p>Lọc theo trạng thái, dòng tiền và loại payment để admin theo dõi lịch sử thanh toán gọn hơn.</p>
+            </div>
+          </div>
+
+          <div className="booking-filter-bar">
+            <label className="form-field">
+              <span>Trạng thái</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="paid">Đã thanh toán</option>
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Dòng tiền</span>
+              <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="incoming">Thu vào</option>
+                <option value="outgoing">Chi ra</option>
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Loại payment</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="listing_fee">Hoa hồng chủ trọ</option>
+                <option value="service">Phí dịch vụ</option>
+                <option value="deposit">Tiền cọc</option>
+                <option value="rent">Tiền thuê</option>
+              </select>
+            </label>
+          </div>
+
+          {filteredPayments.length === 0 ? (
+            <div className="dashboard-empty">
+              {payments.length === 0
+                ? 'Hiện chưa có payment nào liên quan đến admin.'
+                : 'Không có payment nào khớp với bộ lọc hiện tại.'}
+            </div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã payment</th>
+                    <th>Dòng tiền</th>
+                    <th>Nội dung</th>
+                    <th>Số tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Thời gian</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.map((payment, index) => {
+                    const incoming = isIncomingPayment(payment, currentUserId)
+
+                    return (
+                      <tr key={payment.paymentCode}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <strong>{payment.paymentCode}</strong>
+                          <div className="table-sub">Booking: {payment.bookingCode || '---'}</div>
+                        </td>
+                        <td>
+                          <strong>{incoming ? 'Thu vào' : 'Chi ra'}</strong>
+                          <div className="table-sub">
+                            {incoming
+                              ? `Người trả: ${payment.payerName || '---'}`
+                              : `Người nhận: ${payment.payeeUserName || '---'}`}
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{payment.roomTitle || payment.description || formatPaymentTypeLabel(payment.paymentType)}</strong>
+                          <div className="table-sub">{formatPaymentTypeLabel(payment.paymentType)}</div>
+                          <div className="table-sub">Kỳ: {formatBillingPeriod(payment)}</div>
+                        </td>
+                        <td>{formatCurrency(payment.amount)} đ</td>
+                        <td>
+                          <span className={`status-pill ${payment.status}`}>{formatPaymentStatusLabel(payment.status)}</span>
+                        </td>
+                        <td>
+                          <div className="table-sub">Tạo: {formatDateTime(payment.createdAt)}</div>
+                          <div className="table-sub">
+                            {isPaidStatus(payment.status)
+                              ? `Đã trả: ${formatDateTime(payment.paidAt)}`
+                              : `Hạn: ${formatDateTime(payment.expiredAt)}`}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="ghost-button compact"
+                              disabled={openingCode === payment.paymentCode}
+                              onClick={() => openPayment(payment.paymentCode)}
+                            >
+                              {openingCode === payment.paymentCode ? 'Đang mở...' : 'Xem chi tiết'}
+                            </button>
+                            {canConfirmPayment(payment, currentUserId) && (
+                              <button
+                                type="button"
+                                className="primary-button compact"
+                                disabled={confirmingCode === payment.paymentCode}
+                                onClick={() => confirmPaymentByCode(payment.paymentCode)}
+                              >
+                                {confirmingCode === payment.paymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedPayment && (
+          <PaymentQrModal
+            payment={selectedPayment}
+            onClose={() => {
+              setSelectedPayment(null)
+              setRefreshing(false)
+              setPaymentError('')
+            }}
+            onRefresh={refreshSelectedPayment}
+            refreshing={refreshing}
+            error={paymentError}
+            onPaymentChanged={handlePaymentChanged}
+            onPaymentDeleted={handlePaymentDeleted}
+            actionArea={canConfirmPayment(selectedPayment, currentUserId) ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={confirmingCode === selectedPayment.paymentCode}
+                onClick={() => confirmPaymentByCode(selectedPayment.paymentCode)}
+              >
+                {confirmingCode === selectedPayment.paymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+              </button>
+            ) : null}
+          />
+        )}
+      </div>
+    </div>
+  )
+}

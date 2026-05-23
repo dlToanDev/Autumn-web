@@ -1,0 +1,232 @@
+/* UserPaymentsPage uses shared dashboard and payment styles. */
+.user-payment-stats {
+  margin-bottom: 22px;
+}
+
+.user-payment-stats .detail-summary-item {
+  border: 1px solid rgba(212, 163, 115, 0.24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 246, 239, 0.96));
+}
+
+.user-payment-stats .detail-summary-item strong {
+  color: #5b4636;
+}
+
+.rent-billing-panel {
+  margin-bottom: 22px;
+}
+
+.rent-billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.rent-billing-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(212, 163, 115, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(201, 106, 61, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 20px rgba(91, 70, 54, 0.08);
+}
+
+.rent-billing-card.due,
+.rent-billing-card.missing {
+  border-color: rgba(248, 113, 113, 0.34);
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(254, 242, 242, 0.98));
+}
+
+.rent-billing-card.expired {
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.rent-billing-card.success {
+  border-color: rgba(122, 132, 80, 0.32);
+  background:
+    radial-gradient(circle at top right, rgba(122, 132, 80, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 241, 0.98));
+}
+
+.rent-billing-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.rent-billing-kicker {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: #b85c38;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rent-billing-card h3 {
+  margin: 0 0 6px;
+  color: var(--text-h);
+  font-size: 22px;
+}
+
+.rent-billing-card p {
+  margin: 0;
+  color: var(--text);
+}
+
+.rent-billing-amount {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(243, 231, 211, 0.62);
+}
+
+.rent-billing-amount span {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rent-billing-amount strong {
+  color: var(--text-h);
+  font-size: 30px;
+  line-height: 1.08;
+}
+
+.rent-billing-meta {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rent-billing-link {
+  text-decoration: none;
+}
+
+.booking-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(200px, 240px));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.booking-filter-bar .form-field {
+  gap: 6px;
+}
+
+.booking-filter-bar .form-field span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a6352;
+}
+
+.booking-filter-bar .form-field select {
+  min-height: 42px;
+  border: 1px solid #e7d8c8;
+  border-radius: 12px;
+  background: #fff;
+  color: #292524;
+}
+
+.booking-filter-bar .form-field select:focus {
+  outline: none;
+  border-color: #d4a373;
+  box-shadow: 0 0 0 3px rgba(212, 163, 115, 0.2);
+}
+
+.table-shell {
+  border: 1px solid rgba(212, 163, 115, 0.22);
+  border-radius: 18px;
+  overflow: auto;
+  background: #fff;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.data-table th {
+  background: linear-gradient(180deg, #fbf7f1 0%, #f3e7d3 100%);
+  color: #5b4636;
+  font-size: 12px;
+  font-weight: 800;
+  border-bottom: 1px solid rgba(212, 163, 115, 0.34);
+}
+
+.data-table td {
+  border-bottom: 1px solid rgba(231, 229, 228, 0.8);
+}
+
+.data-table tbody tr:hover td {
+  background: rgba(250, 246, 239, 0.8);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-actions {
+  align-items: stretch;
+}
+
+.table-actions .primary-button.compact,
+.table-actions .ghost-button.compact {
+  min-width: 108px;
+  min-height: 38px;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 1;
+}
+
+.table-actions .primary-button.compact {
+  background: linear-gradient(135deg, #c96a3d 0%, #b85c38 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(201, 106, 61, 0.28);
+}
+
+.table-actions .primary-button.compact:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(184, 92, 56, 0.34);
+}
+
+.table-actions .ghost-button.compact {
+  background: linear-gradient(180deg, #ffffff 0%, #faf6ef 100%);
+  color: #5b4636;
+  border: 1px solid rgba(212, 163, 115, 0.52);
+  box-shadow: 0 8px 18px rgba(91, 70, 54, 0.1);
+}
+
+.table-actions .ghost-button.compact:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #c96a3d;
+  color: #b85c38;
+}
+
+.table-actions .primary-button.compact:disabled,
+.table-actions .ghost-button.compact:disabled {
+  opacity: 0.72;
+  color: inherit;
+}
+
+@media (max-width: 720px) {
+  .booking-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .rent-billing-card-top {
+    flex-direction: column;
+  }
+}

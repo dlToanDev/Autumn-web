@@ -1,0 +1,507 @@
+// Trang LandlordPropertiesPage la noi chu tro CRUD "khu tro/nha".
+// Sau khi co property, chu tro moi co the tao cac room thuoc property do.
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import { getDistricts, getProvinces, getWards } from '../api/addressApi'
+import {
+  createProperty,
+  deleteProperty,
+  getLandlordProperties,
+  updateProperty,
+} from '../api/rentalApi'
+
+const defaultForm = {
+  name: '',
+  description: '',
+  provinceId: '',
+  districtId: '',
+  wardId: '',
+  addressLine: '',
+  latitude: '',
+  longitude: '',
+  status: 'active',
+}
+
+function getStoredUser() {
+  // File nay duoc viet truoc util/auth nen van giu helper rieng cho localStorage.
+  const userStr = localStorage.getItem('user')
+  if (!userStr) return null
+
+  try {
+    return JSON.parse(userStr)
+  } catch {
+    return null
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) return '---'
+  return new Date(value).toLocaleString('vi-VN')
+}
+
+export default function LandlordPropertiesPage() {
+  const navigate = useNavigate()
+  const [properties, setProperties] = useState([])
+  const [provinces, setProvinces] = useState([])
+  const [districts, setDistricts] = useState([])
+  const [wards, setWards] = useState([])
+  const [form, setForm] = useState(defaultForm)
+  const [editingId, setEditingId] = useState(null)
+  const [selectedProperty, setSelectedProperty] = useState(null)
+  const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const user = useMemo(() => getStoredUser(), [])
+  const roleCode = (user?.roleCode || '').toUpperCase()
+  const canManage = roleCode === 'LANDLORD'
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    if (!canManage) {
+      navigate('/')
+      return
+    }
+
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        const [propertyData, provinceData] = await Promise.all([
+          getLandlordProperties(),
+          getProvinces(),
+        ])
+        setProperties(propertyData)
+        setProvinces(provinceData)
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách khu trọ.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [navigate, canManage])
+
+  useEffect(() => {
+    const loadDistricts = async () => {
+      if (!form.provinceId) {
+        setDistricts([])
+        return
+      }
+
+      try {
+        const data = await getDistricts(form.provinceId)
+        setDistricts(data)
+      } catch {
+        setDistricts([])
+      }
+    }
+
+    loadDistricts()
+  }, [form.provinceId])
+
+  useEffect(() => {
+    const loadWards = async () => {
+      if (!form.districtId) {
+        setWards([])
+        return
+      }
+
+      try {
+        const data = await getWards(form.districtId)
+        setWards(data)
+      } catch {
+        setWards([])
+      }
+    }
+
+    loadWards()
+  }, [form.districtId])
+
+  const handleChange = (field, value) => {
+    setForm((prev) => {
+      if (field === 'provinceId') {
+        return { ...prev, provinceId: value, districtId: '', wardId: '' }
+      }
+
+      if (field === 'districtId') {
+        return { ...prev, districtId: value, wardId: '' }
+      }
+
+      return { ...prev, [field]: value }
+    })
+  }
+
+  const resetForm = () => {
+    setForm(defaultForm)
+    setEditingId(null)
+    setDistricts([])
+    setWards([])
+  }
+
+  const closeForm = () => {
+    resetForm()
+    setShowForm(false)
+  }
+
+  const openCreateForm = () => {
+    setMessage('')
+    setError('')
+    setSelectedProperty(null)
+    resetForm()
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const startEdit = async (property) => {
+    setMessage('')
+    setError('')
+    setEditingId(property.id)
+    setSelectedProperty(null)
+    setForm({
+      name: property.name || '',
+      description: property.description || '',
+      provinceId: String(property.provinceId || ''),
+      districtId: String(property.districtId || ''),
+      wardId: String(property.wardId || ''),
+      addressLine: property.addressLine || '',
+      latitude: property.latitude ?? '',
+      longitude: property.longitude ?? '',
+      status: property.status || 'active',
+    })
+    setShowForm(true)
+
+    try {
+      const [districtData, wardData] = await Promise.all([
+        getDistricts(property.provinceId),
+        getWards(property.districtId),
+      ])
+      setDistricts(districtData)
+      setWards(wardData)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {
+      setError('Không thể tải dữ liệu địa chỉ để chỉnh sửa.')
+    }
+  }
+
+  const openDetail = (property) => {
+    setSelectedProperty(property)
+  }
+
+  const refreshProperties = async () => {
+    const propertyData = await getLandlordProperties()
+    setProperties(propertyData)
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setSubmitting(true)
+    setMessage('')
+    setError('')
+
+    const payload = {
+      name: form.name,
+      description: form.description || null,
+      provinceId: Number(form.provinceId),
+      districtId: Number(form.districtId),
+      wardId: Number(form.wardId),
+      addressLine: form.addressLine,
+      latitude: form.latitude === '' ? null : Number(form.latitude),
+      longitude: form.longitude === '' ? null : Number(form.longitude),
+      status: form.status,
+    }
+
+    try {
+      if (editingId) {
+        await updateProperty(editingId, payload)
+        setMessage('Cập nhật khu trọ thành công.')
+      } else {
+        await createProperty(payload)
+        setMessage('Tạo khu trọ thành công.')
+      }
+
+      await refreshProperties()
+      closeForm()
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể lưu khu trọ.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (propertyId) => {
+    const confirmed = window.confirm('Bạn có chắc muốn xóa khu trọ này không?')
+    if (!confirmed) return
+
+    setError('')
+    setMessage('')
+
+    try {
+      await deleteProperty(propertyId)
+      setProperties((prev) => prev.filter((item) => item.id !== propertyId))
+      if (editingId === propertyId) {
+        closeForm()
+      }
+      if (selectedProperty?.id === propertyId) {
+        setSelectedProperty(null)
+      }
+      setMessage('Đã xóa khu trọ.')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể xóa khu trọ.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải danh sách khu trọ...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang quản lý khu trọ của bạn"
+          description={[
+            'Bạn có thể thêm, sửa, xóa và rà soát toàn bộ khu trọ đang vận hành trên một màn hình duy nhất.',
+            'Nếu phát sinh lỗi dữ liệu hoặc cần hỗ trợ duyệt nhanh, hãy liên hệ admin.',
+          ]}
+          action={{ to: '/messages', label: 'Liên hệ admin' }}
+        />
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="dashboard-panel">
+          <div className="room-toolbar">
+            <div>
+              <h2>Danh sách khu trọ</h2>
+              <p>{properties.length} khu trọ đang thuộc tài khoản của bạn.</p>
+            </div>
+            <button type="button" className="primary-button" onClick={openCreateForm}>
+              Tạo khu trọ mới
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="room-form-shell">
+              <div className="panel-heading">
+                <div>
+                  <h2>{editingId ? 'Sửa khu trọ' : 'Thêm khu trọ mới'}</h2>
+                  <p>Điền thông tin khu trọ rồi lưu để tiếp tục tạo phòng bên trong.</p>
+                </div>
+                <button type="button" className="ghost-button" onClick={closeForm}>
+                  Đóng form
+                </button>
+              </div>
+
+              <form className="dashboard-form" onSubmit={handleSubmit}>
+                <div className="form-grid two-cols">
+                  <label className="form-field">
+                    <span>Tên khu trọ</span>
+                    <input value={form.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Khu trọ Ánh Dương" required />
+                  </label>
+
+                  <label className="form-field">
+                    <span>Trạng thái</span>
+                    <select value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
+                      <option value="active">Hoạt động</option>
+                      <option value="inactive">Tạm dừng</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="form-field">
+                  <span>Mô tả</span>
+                  <textarea value={form.description} onChange={(e) => handleChange('description', e.target.value)} rows="4" placeholder="Mô tả tổng quan khu trọ..." />
+                </label>
+
+                <div className="form-grid three-cols">
+                  <label className="form-field">
+                    <span>Tỉnh/Thành</span>
+                    <select value={form.provinceId} onChange={(e) => handleChange('provinceId', e.target.value)} required>
+                      <option value="">Chọn tỉnh/thành</option>
+                      {provinces.map((province) => (
+                        <option key={province.id} value={province.id}>{province.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-field">
+                    <span>Quận/Huyện</span>
+                    <select value={form.districtId} onChange={(e) => handleChange('districtId', e.target.value)} required disabled={!form.provinceId}>
+                      <option value="">Chọn quận/huyện</option>
+                      {districts.map((district) => (
+                        <option key={district.id} value={district.id}>{district.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-field">
+                    <span>Phường/Xã</span>
+                    <select value={form.wardId} onChange={(e) => handleChange('wardId', e.target.value)} required disabled={!form.districtId}>
+                      <option value="">Chọn phường/xã</option>
+                      {wards.map((ward) => (
+                        <option key={ward.id} value={ward.id}>{ward.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="form-field">
+                  <span>Địa chỉ chi tiết</span>
+                  <input value={form.addressLine} onChange={(e) => handleChange('addressLine', e.target.value)} placeholder="Số nhà, tên đường..." required />
+                </label>
+
+                <div className="form-grid two-cols">
+                  <label className="form-field">
+                    <span>Latitude</span>
+                    <input type="number" step="0.0000001" value={form.latitude} onChange={(e) => handleChange('latitude', e.target.value)} placeholder="10.762622" />
+                  </label>
+
+                  <label className="form-field">
+                    <span>Longitude</span>
+                    <input type="number" step="0.0000001" value={form.longitude} onChange={(e) => handleChange('longitude', e.target.value)} placeholder="106.660172" />
+                  </label>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="primary-button" disabled={submitting}>
+                    {submitting ? 'Đang lưu...' : editingId ? 'Lưu cập nhật' : 'Tạo khu trọ'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {properties.length === 0 ? (
+            <div className="dashboard-empty">Chưa có khu trọ nào trong hệ thống.</div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Tên khu trọ</th>
+                    <th>Địa chỉ</th>
+                    <th>Tọa độ</th>
+                    <th>Số phòng</th>
+                    <th>Trạng thái</th>
+                    <th>Cập nhật</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {properties.map((property, index) => (
+                    <tr key={property.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{property.name}</strong>
+                        <div className="table-sub">{property.provinceName}</div>
+                      </td>
+                      <td className="table-address">{property.fullAddress}</td>
+                      <td>
+                        {property.latitude && property.longitude
+                          ? `${property.latitude}, ${property.longitude}`
+                          : '---'}
+                      </td>
+                      <td>{property.roomCount}</td>
+                      <td>
+                        <span className={`status-pill ${property.status}`}>{property.status}</span>
+                      </td>
+                      <td>{formatDateTime(property.updatedAt)}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button type="button" className="ghost-button compact" onClick={() => openDetail(property)}>
+                            Xem chi tiết
+                          </button>
+                          <button type="button" className="ghost-button compact" onClick={() => startEdit(property)}>
+                            Sửa
+                          </button>
+                          <button type="button" className="danger-button compact" onClick={() => handleDelete(property.id)}>
+                            Xóa
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedProperty && (
+          <div className="detail-modal-backdrop" onClick={() => setSelectedProperty(null)}>
+            <div className="detail-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="panel-heading">
+                <div>
+                  <h2>Chi tiết khu trọ</h2>
+                  <p>{selectedProperty.name}</p>
+                </div>
+                <button type="button" className="ghost-button" onClick={() => setSelectedProperty(null)}>
+                  Đóng
+                </button>
+              </div>
+
+              <div className="detail-grid">
+                <div className="detail-card">
+                  <span>Trạng thái</span>
+                  <strong>{selectedProperty.status}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Số phòng</span>
+                  <strong>{selectedProperty.roomCount}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Tỉnh/Thành</span>
+                  <strong>{selectedProperty.provinceName}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Quận/Huyện</span>
+                  <strong>{selectedProperty.districtName}</strong>
+                </div>
+              </div>
+
+              <div className="detail-grid">
+                <div className="detail-card">
+                  <span>Phường/Xã</span>
+                  <strong>{selectedProperty.wardName}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Latitude</span>
+                  <strong>{selectedProperty.latitude ?? '---'}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Longitude</span>
+                  <strong>{selectedProperty.longitude ?? '---'}</strong>
+                </div>
+                <div className="detail-card">
+                  <span>Cập nhật lần cuối</span>
+                  <strong>{formatDateTime(selectedProperty.updatedAt)}</strong>
+                </div>
+              </div>
+
+              <p className="stack-note">{selectedProperty.fullAddress}</p>
+              {selectedProperty.description && <p className="stack-note">{selectedProperty.description}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

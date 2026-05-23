@@ -1,0 +1,93 @@
+/* AdminAnnouncementsPage.css: style cho form soan announcement va lich su bai da gui. */
+.admin-announcement-form textarea {
+  min-height: 220px;
+}
+
+.announcement-preview-box {
+  height: 100%;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  padding: 18px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+}
+
+.announcement-preview-box strong {
+  display: block;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.announcement-preview-box p {
+  margin: 0;
+  color: var(--text);
+}
+
+.announcement-history-list {
+  gap: 14px;
+}
+
+.announcement-history-card {
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+}
+
+.announcement-history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.announcement-history-head h3 {
+  margin: 0 0 6px;
+  color: var(--text-h);
+}
+
+.announcement-history-meta {
+  margin: 0 0 10px;
+  flex-wrap: wrap;
+}
+
+.announcement-history-content {
+  margin: 0;
+  color: var(--text-h);
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.announcement-target-pill {
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.announcement-target-pill.all {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.18);
+}
+
+.announcement-target-pill.user {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.announcement-target-pill.landlord {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.announcement-target-pill.admin {
+  background: rgba(168, 85, 247, 0.14);
+  color: #2563EB;
+  border-color: rgba(37, 99, 235, 0.16);
+}

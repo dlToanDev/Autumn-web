@@ -1,0 +1,57 @@
+/* AdminRoomsPage uses shared dashboard extras and table styles. */
+
+.table-action-wrap {
+	align-items: stretch;
+	min-width: 250px;
+}
+
+.table-action-wrap .ghost-button.compact,
+.table-action-wrap .danger-btn.mini,
+.table-action-wrap .card-link-button.ghost-button.compact {
+	min-width: 72px;
+	min-height: 36px;
+	padding: 8px 12px;
+	border-radius: 12px;
+	font-size: 12px;
+	font-weight: 800;
+	line-height: 1;
+	text-decoration: none;
+	opacity: 1;
+}
+
+.table-action-wrap .ghost-button.compact,
+.table-action-wrap .card-link-button.ghost-button.compact {
+	background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+	color: #1e293b;
+	border: 1px solid rgba(191, 208, 228, 0.96);
+	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.table-action-wrap .ghost-button.compact:hover:not(:disabled),
+.table-action-wrap .card-link-button.ghost-button.compact:hover {
+	transform: translateY(-1px);
+	border-color: #93c5fd;
+	color: #1d4ed8;
+}
+
+.table-action-wrap .danger-btn.mini {
+	border-color: rgba(248, 113, 113, 0.32);
+	box-shadow: 0 10px 20px rgba(239, 68, 68, 0.18);
+}
+
+.table-action-wrap .danger-btn.mini:hover:not(:disabled) {
+	transform: translateY(-1px);
+	opacity: 0.96;
+}
+
+.table-action-wrap .ghost-button.compact:disabled,
+.table-action-wrap .danger-btn.mini:disabled {
+	opacity: 0.72;
+	color: inherit;
+}
+
+@media (max-width: 900px) {
+	.table-action-wrap {
+		min-width: 0;
+	}
+}

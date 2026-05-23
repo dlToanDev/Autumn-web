@@ -1,0 +1,334 @@
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import HomePage from './pages/HomePage'
+import UserHomePage from './pages/UserHomePage'
+import RoomSearchPage from './pages/RoomSearchPage'
+import RoomDetailPage from './pages/RoomDetailPage'
+import UserContractsPage from './pages/UserContractsPage'
+import UserPaymentsPage from './pages/UserPaymentsPage'
+import NotificationsPage from './pages/NotificationsPage'
+import NotificationDetailPage from './pages/NotificationDetailPage'
+import MessagesPage from './pages/MessagesPage'
+import ProfilePage from './pages/ProfilePage'
+import BecomeLandlordPage from './pages/BecomeLandlordPage'
+import LandlordDashboardPage from './pages/LandlordDashboardPage'
+import LandlordBookingsPage from './pages/LandlordBookingsPage'
+import LandlordPaymentsPage from './pages/LandlordPaymentsPage'
+import LandlordCommissionPaymentsPage from './pages/LandlordCommissionPaymentsPage'
+import LandlordTenantsPage from './pages/LandlordTenantsPage'
+import AdminLandlordApplicationsPage from './pages/AdminLandlordApplicationsPage'
+import AdminDashboardPage from './pages/AdminDashboardPage'
+import AdminContractsPage from './pages/AdminContractsPage'
+import AdminAnnouncementsPage from './pages/AdminAnnouncementsPage'
+import AdminCommissionPaymentsPage from './pages/AdminCommissionPaymentsPage'
+import AdminPaymentsPage from './pages/AdminPaymentsPage'
+import AdminPaymentSettingsPage from './pages/AdminPaymentSettingsPage'
+import AdminUsersPage from './pages/AdminUsersPage'
+import AdminRoomsPage from './pages/AdminRoomsPage'
+import LandlordPropertiesPage from './pages/LandlordPropertiesPage'
+import LandlordRoomsPage from './pages/LandlordRoomsPage'
+import Header from './components/Header'
+import Footer from './components/Footer'
+import FloatingMessageButton from './components/FloatingMessageButton'
+import ManagementLayout from './components/ManagementLayout'
+import { getDefaultRoute, getRoleCode, getStoredAuth } from './utils/auth'
+import './styles/App.css'
+
+// Component bao ve route can dang nhap.
+// Neu chua login ma vao route nay, user se bi day ve /login.
+function RequireAuth({ isLoggedIn, children }) {
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />
+  }
+
+  return children
+}
+
+// Component bao ve route theo role.
+// Dung cho dashboard landlord/admin va cac man quan tri.
+function RequireRole({ isLoggedIn, user, allowedRoles, children }) {
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />
+  }
+
+  const roleCode = getRoleCode(user)
+  if (!allowedRoles.includes(roleCode)) {
+    return <Navigate to={getDefaultRoute(isLoggedIn, user)} replace />
+  }
+
+  return children
+}
+
+// App la diem vao chinh cua frontend.
+// Nhiem vu cua file nay:
+// - Lay auth state tu localStorage
+// - Ve Header va nut chat noi dung chung cho toan app
+// - Khai bao route -> page
+// - Bao ve route bang RequireAuth / RequireRole
+function App() {
+  // useLocation duoc goi de App re-render theo route hien tai.
+  const location = useLocation()
+
+  // authState la "anh chup hien tai" cua token + user dang luu trong localStorage.
+  // Cac route va component dung thong tin nay de xac dinh user da login chua.
+  const authState = getStoredAuth()
+  const defaultRoute = getDefaultRoute(authState.isLoggedIn, authState.user)
+  const shouldShowFooter = location.pathname === '/'
+    || location.pathname === '/user/rooms'
+    || location.pathname.startsWith('/rooms/')
+
+  // Cac route admin va landlord hien thi ManagementLayout (sidebar trai + content phai)
+  // thay vi Header toan trang nhu cac route khac.
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const isLandlordRoute = location.pathname.startsWith('/landlord')
+  const isManagementRoute = isAdminRoute || isLandlordRoute
+  const managementRole = isAdminRoute ? 'ADMIN' : 'LANDLORD'
+
+  // An header tren cac route quan tri (admin/landlord); cac route khac van co header binh thuong.
+  const shouldHideHeader = isManagementRoute
+
+  // Helper tao element co sidebar. Nhan children la JSX page.
+  const withMgmt = (page) => (
+    <ManagementLayout role={managementRole}>{page}</ManagementLayout>
+  )
+
+  return (
+    <div className={`app-shell${isManagementRoute ? ' app-shell--mgmt' : ''}`}>
+      {/* Header chi hien o trang non-management cho khach va user thuong */}
+      {!shouldHideHeader && <Header isLoggedIn={authState.isLoggedIn} user={authState.user} />}
+
+      {/* Nut chat noi goc phai duoi, cung co mat o moi trang (tru trang messages) */}
+      <FloatingMessageButton isLoggedIn={authState.isLoggedIn} />
+
+      <main className="app-content">
+        <Routes>
+          {/* Public routes: ai cung vao duoc */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+
+          {/* User routes: bat buoc login */}
+          <Route
+            path="/user"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <UserHomePage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/user/rooms"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <RoomSearchPage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/user/contracts"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <UserContractsPage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/user/payments"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <UserPaymentsPage />
+              </RequireAuth>
+            )}
+          />
+
+          {/* Notifications routes: danh sach + chi tiet */}
+          <Route
+            path="/notifications"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <NotificationsPage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/notifications/:notificationId"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <NotificationDetailPage />
+              </RequireAuth>
+            )}
+          />
+
+          {/* Route chat chinh cua he thong */}
+          <Route
+            path="/messages"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <MessagesPage />
+              </RequireAuth>
+            )}
+          />
+
+          {/* Profile/user settings */}
+          <Route
+            path="/profile"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <ProfilePage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/become-landlord"
+            element={(
+              <RequireAuth isLoggedIn={authState.isLoggedIn}>
+                <BecomeLandlordPage />
+              </RequireAuth>
+            )}
+          />
+          <Route
+            path="/landlord"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordDashboardPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/properties"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordPropertiesPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/rooms"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordRoomsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/bookings"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordBookingsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/payments"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordPaymentsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/commission-payments"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordCommissionPaymentsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/landlord/tenants"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['LANDLORD']}>
+                {withMgmt(<LandlordTenantsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminDashboardPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/landlord-applications"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminLandlordApplicationsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/announcements"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminAnnouncementsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/contracts"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminContractsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/users"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminUsersPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/rooms"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminRoomsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/commission-payments"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminCommissionPaymentsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/payments"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminPaymentsPage />)}
+              </RequireRole>
+            )}
+          />
+          <Route
+            path="/admin/payment-settings"
+            element={(
+              <RequireRole isLoggedIn={authState.isLoggedIn} user={authState.user} allowedRoles={['ADMIN']}>
+                {withMgmt(<AdminPaymentSettingsPage />)}
+              </RequireRole>
+            )}
+          />
+
+          {/* Neu route khong khop, day ve route mac dinh theo vai tro/login state */}
+          <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+        </Routes>
+      </main>
+
+      {shouldShowFooter && <Footer />}
+    </div>
+  )
+}
+
+export default App

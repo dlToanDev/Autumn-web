@@ -1,0 +1,50 @@
+import apiClient from './apiClient'
+
+// Lop API cho tinh nang nhan tin.
+// Day la diem noi giua frontend va backend MessagesController.
+// MessagesPage va FloatingMessageButton deu goi file nay.
+function authConfig() {
+  // Token can thiet vi chat la tinh nang danh cho user da dang nhap.
+  const token = localStorage.getItem('token')
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
+// Lay danh sach hoi thoai tong hop.
+// Frontend dung cho:
+// - cot trai MessagesPage
+// - badge nut chat noi
+export async function getMessageConversations() {
+  const response = await apiClient.get('/api/messages/conversations', authConfig())
+  return response.data
+}
+
+// Lay danh ba user co the mo chat moi.
+// keyword la tuy chon, co de rong.
+export async function getMessageContacts(keyword = '') {
+  // Chuan hoa keyword truoc khi gui de tranh goi query thua voi dau cach.
+  const normalizedKeyword = String(keyword || '').trim()
+  const response = await apiClient.get('/api/messages/contacts', {
+    ...authConfig(),
+    params: normalizedKeyword ? { keyword: normalizedKeyword } : {},
+  })
+  return response.data
+}
+
+// Lay lich su chat giua current user va 1 user khac.
+export async function getMessagesWithUser(otherUserId) {
+  const response = await apiClient.get(`/api/messages/with/${otherUserId}`, authConfig())
+  return response.data
+}
+
+// Gui 1 tin nhan moi den otherUserId.
+// payload hien tai chi co field content.
+export async function sendMessageToUser(otherUserId, payload) {
+  const response = await apiClient.post(`/api/messages/with/${otherUserId}`, payload, authConfig())
+  return response.data
+}
+
+// Danh dau cac tin nhan den trong 1 hoi thoai la da doc.
+export async function markConversationAsRead(otherUserId) {
+  const response = await apiClient.post(`/api/messages/with/${otherUserId}/read`, {}, authConfig())
+  return response.data
+}

@@ -1,0 +1,9 @@
+/* Loading.css: style cho loading screen/spinner duoc tai su dung o nhieu trang. */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 0;
+  color: var(--text);
+}

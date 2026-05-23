@@ -1,0 +1,83 @@
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { FiArrowUpRight, FiMessageCircle } from 'react-icons/fi'
+import { getMessageConversations } from '../api/messageApi'
+
+// Nut chat noi co dinh o goc phai duoi man hinh.
+// Tac dung:
+// - cho phep mo nhanh trang /messages tu moi trang
+// - hien tong so tin nhan chua doc
+// File nay khong render UI chat, chi la "launcher" de mo trang chat.
+export default function FloatingMessageButton({ isLoggedIn }) {
+  const location = useLocation()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Khi da vao trang messages roi thi an nut noi di,
+  // tranh che len khung composer/gui tin nhan.
+  const isMessagesPage = location.pathname.startsWith('/messages')
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setUnreadCount(0)
+      return undefined
+    }
+
+    let isDisposed = false
+
+    const loadUnreadCount = async () => {
+      try {
+        // Conversations API da tong hop san unreadCount theo tung hoi thoai.
+        // O day minh cong don de ra badge tong.
+        const conversations = await getMessageConversations()
+        if (isDisposed) return
+
+        const nextUnreadCount = Array.isArray(conversations)
+          ? conversations.reduce((total, item) => total + Number(item.unreadCount || 0), 0)
+          : 0
+
+        setUnreadCount(nextUnreadCount)
+      } catch {
+        if (!isDisposed) {
+          setUnreadCount(0)
+        }
+      }
+    }
+
+    // Tai badge lan dau khi component mount.
+    loadUnreadCount()
+
+    // Polling dinh ky de badge cap nhat khi co tin moi.
+    const intervalId = window.setInterval(loadUnreadCount, 10000)
+
+    return () => {
+      isDisposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [isLoggedIn, location.pathname])
+
+  if (!isLoggedIn || isMessagesPage) return null
+
+  // Gioi han badge tranh qua dai.
+  const unreadBadgeLabel = unreadCount > 99 ? '99+' : unreadCount
+
+  return (
+    <Link
+      to="/messages"
+      className="floating-message-button"
+      aria-label="Tin nhắn"
+      title="Tin nhắn"
+    >
+      <span className="floating-message-icon-shell">
+        <FiMessageCircle className="floating-message-icon" />
+      </span>
+      <span className="floating-message-copy">
+        <span className="floating-message-label">Tin nhắn</span>
+        <span className="floating-message-subtitle">Mở hộp thư ngay</span>
+      </span>
+      <FiArrowUpRight className="floating-message-arrow" />
+
+      {/* Chi hien badge khi thuc su co tin nhan chua doc */}
+      {unreadCount > 0 && <span className="floating-message-badge">{unreadBadgeLabel}</span>}
+    </Link>
+  )
+}

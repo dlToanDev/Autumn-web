@@ -1,0 +1,89 @@
+// rentalApi phuc vu du lieu cot loi cua bai toan cho thue:
+// amenities, rooms, properties va cac thao tac landlord.
+import apiClient from './apiClient'
+
+function authConfig() {
+  // Cac API public nhu getRooms/getRoomById khong can token,
+  // nhung landlord CRUD property/room thi bat buoc can.
+  const token = localStorage.getItem('token')
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
+export async function getAmenities() {
+  // RoomSearchPage va LandlordRoomsPage dung de render danh sach tien ich.
+  const response = await apiClient.get('/api/amenities')
+  return response.data
+}
+
+export async function getRooms(params = {}) {
+  // HomePage va RoomSearchPage goi endpoint public nay.
+  const response = await apiClient.get('/api/rooms', { params })
+  return response.data
+}
+
+export async function getRoomById(roomId) {
+  // RoomDetailPage tai chi tiet day du cua mot phong.
+  const response = await apiClient.get(`/api/rooms/${roomId}`)
+  return response.data
+}
+
+export async function getRoomReviews(roomId) {
+  // RoomDetailPage lay danh gia tu bang room_reviews.
+  const response = await apiClient.get(`/api/rooms/${roomId}/reviews`)
+  return response.data
+}
+
+export async function getLandlordProperties() {
+  // LandlordPropertiesPage va dashboard chu tro doc danh sach nha cua minh.
+  const response = await apiClient.get('/api/landlord/properties', authConfig())
+  return response.data
+}
+
+export async function getLandlordPropertyById(propertyId) {
+  const response = await apiClient.get(`/api/landlord/properties/${propertyId}`, authConfig())
+  return response.data
+}
+
+export async function createProperty(payload) {
+  // Tao nha/tai san de sau do gan phong vao.
+  const response = await apiClient.post('/api/landlord/properties', payload, authConfig())
+  return response.data
+}
+
+export async function updateProperty(propertyId, payload) {
+  const response = await apiClient.put(`/api/landlord/properties/${propertyId}`, payload, authConfig())
+  return response.data
+}
+
+export async function deleteProperty(propertyId) {
+  const response = await apiClient.delete(`/api/landlord/properties/${propertyId}`, authConfig())
+  return response.data
+}
+
+export async function getLandlordRooms() {
+  // LandlordRoomsPage va dashboard chu tro lay danh sach phong cua chu tro.
+  const response = await apiClient.get('/api/landlord/rooms', authConfig())
+  return response.data
+}
+
+export async function getLandlordRoomById(roomId) {
+  const response = await apiClient.get(`/api/landlord/rooms/${roomId}`, authConfig())
+  return response.data
+}
+
+export async function createRoom(payload) {
+  // Chu tro dang tin phong moi.
+  const response = await apiClient.post('/api/landlord/rooms', payload, authConfig())
+  return response.data
+}
+
+export async function updateRoom(roomId, payload) {
+  const response = await apiClient.put(`/api/landlord/rooms/${roomId}`, payload, authConfig())
+  return response.data
+}
+
+export async function deleteRoom(roomId) {
+  // LandlordRoomsPage xoa phong khoi he thong.
+  const response = await apiClient.delete(`/api/landlord/rooms/${roomId}`, authConfig())
+  return response.data
+}

@@ -1,0 +1,481 @@
+/* DashboardExtras.css: utility class bo sung cho button, chip, alert, card-link va cac helper UI. */
+.card-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.dashboard-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.dashboard-wide-grid,
+.detail-info-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.section-top-gap {
+  margin-top: 22px;
+}
+
+.admin-filter-grid {
+  align-items: end;
+}
+
+.table-strong {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.table-action-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.property-mini-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-actions.spread {
+  justify-content: space-between;
+}
+
+.primary-button,
+.ghost-button,
+.success-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  white-space: nowrap;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #0ea5e9 100%);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(29, 78, 216, 0.22);
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(29, 78, 216, 0.28);
+  opacity: 1;
+}
+
+.ghost-button {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-h);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.ghost-button:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(37, 99, 235, 0.2);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+  opacity: 1;
+}
+
+.success-button {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(16, 185, 129, 0.22);
+}
+
+.success-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(16, 185, 129, 0.28);
+  opacity: 1;
+}
+
+.danger-button {
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error-border);
+}
+
+.danger-button:hover {
+  background: #FEE2E2;
+  box-shadow: 0 14px 26px rgba(220, 38, 38, 0.1);
+  opacity: 1;
+}
+
+/* ── Alerts ─────────────────────────────────────────────────── */
+.alert {
+  max-width: 1240px;
+  margin: 0 auto 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.alert.success {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+
+.alert.error {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: var(--error-border);
+}
+
+/* ── Room/stack grids ────────────────────────────────────────── */
+.room-grid,
+.stack-list {
+  display: grid;
+  gap: 16px;
+}
+
+.room-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.room-card-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--input-bg);
+}
+
+.room-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.room-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.room-card-media .status-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.room-card-body,
+.stack-card {
+  padding: 16px 18px;
+}
+
+.room-card-heading,
+.stack-card-top,
+.metric-row,
+.inline-actions,
+.tag-row {
+  display: flex;
+  gap: 10px;
+}
+
+.room-card-heading,
+.stack-card-top {
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+/* Ngan text tran khoi card khi ten/email dai */
+.stack-card-top > div {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stack-card-top .status-pill {
+  flex-shrink: 0;
+}
+
+.room-card-heading h3,
+.stack-card h3 {
+  font-size: 17px;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.room-card-property,
+.room-card-address,
+.stack-note {
+  margin-bottom: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.metric-row {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.metric-row span,
+.mini-tag {
+  padding: 5px 10px;
+  background: var(--input-bg);
+  color: var(--text-h);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mini-tag {
+  margin-bottom: 6px;
+}
+
+.tag-row {
+  flex-wrap: wrap;
+}
+
+/* ── Status pills ────────────────────────────────────────────── */
+.status-pill {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.status-pill.available,
+.status-pill.active,
+.status-pill.approved {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.status-pill.hidden,
+.status-pill.inactive,
+.status-pill.rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.status-pill.pending,
+.status-pill.reserved,
+.status-pill.rented {
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.status-pill.confirmed,
+.status-pill.paid,
+.status-pill.waiting_payment {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.status-pill.waiting_confirm {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.status-pill.due,
+.status-pill.missing {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.status-pill.canceled,
+.status-pill.expired {
+  background: rgba(148, 163, 184, 0.14);
+  color: #64748B;
+}
+
+.inline-actions {
+  margin-top: 14px;
+}
+
+/* ── Dashboard empty state ───────────────────────────────────── */
+.dashboard-empty {
+  padding: 32px 24px;
+  text-align: center;
+  border-radius: 16px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Table extras ────────────────────────────────────────────── */
+.table-sub {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.table-address {
+  min-width: 220px;
+}
+
+.table-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 110px;
+}
+
+/* ── Room manager ────────────────────────────────────────────── */
+.room-manager-page .dashboard-panel {
+  padding: 20px;
+}
+
+.room-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.room-toolbar h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+/* ── Upload ──────────────────────────────────────────────────── */
+.multi-upload-box {
+  padding: 16px;
+  border: 1.5px dashed var(--input-border);
+  border-radius: 14px;
+  background: var(--input-bg);
+  transition: border-color 0.15s ease;
+}
+
+.multi-upload-box:hover {
+  border-color: var(--accent);
+}
+
+.multi-upload-box input {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.multi-upload-box p,
+.uploading-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* ── Image preview ───────────────────────────────────────────── */
+.image-preview-grid,
+.detail-image-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.image-preview-card,
+.detail-image-card {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+.image-preview-card img,
+.detail-image-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.image-preview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.compact {
+  padding: 7px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.ghost-button.compact.active {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+
+/* ── Modal (override ListingDashboard defaults) ──────────────── */
+.detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1200;
+}
+
+.detail-modal {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--card-bg);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  padding: 24px;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-metric-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .dashboard-wide-grid,
+  .detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .table-action-wrap {
+    min-width: 210px;
+  }
+}

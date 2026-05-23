@@ -1,0 +1,124 @@
+/* NotificationsPage.css: style cho toolbar, bo loc, card thong bao va badge read/unread. */
+.notification-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.notification-filter-row {
+  margin-bottom: 18px;
+}
+
+.notification-list {
+  gap: 14px;
+}
+
+.notification-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 20px;
+  overflow: visible;
+}
+
+.notification-card.unread {
+  border-color: rgba(59, 130, 246, 0.32);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.notification-card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.notification-card-head > div {
+  min-width: 0;
+}
+
+.notification-card-head h3 {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 24px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.notification-card-meta {
+  margin: 0 0 10px;
+  flex-wrap: wrap;
+}
+
+.notification-card .stack-note {
+  margin: 8px 0 0;
+  color: var(--text);
+}
+
+.notification-card-content {
+  display: block;
+  width: 100%;
+  margin: 0;
+  color: var(--text-h);
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notification-card-actions {
+  justify-content: flex-start;
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.notification-card-actions .card-link-button {
+  min-width: 140px;
+}
+
+.notification-type-pill.booking {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.notification-type-pill.announcement {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.notification-type-pill.payment {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.notification-type-pill.contract {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.notification-type-pill.review {
+  background: rgba(168, 85, 247, 0.14);
+  color: #2563EB;
+}
+
+.notification-type-pill.profile,
+.notification-type-pill.system {
+  background: rgba(148, 163, 184, 0.16);
+  color: #475569;
+}
+
+@media (max-width: 700px) {
+  .notification-toolbar,
+  .notification-card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notification-card-head {
+    grid-template-columns: 1fr;
+  }
+}

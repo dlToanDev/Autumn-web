@@ -1,0 +1,172 @@
+/* PaymentShared.css: style dung chung cho PaymentQrModal va cac khoi hien thi payment proof/QR. */
+.payment-modal {
+  width: min(1080px, 100%);
+}
+
+.payment-alert {
+  margin: 0 0 18px;
+}
+
+.payment-alert-info,
+.payment-alert-warning {
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-weight: 600;
+}
+
+.payment-alert-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+
+.payment-alert-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+}
+
+.payment-modal-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.payment-qr-panel,
+.payment-info-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.payment-qr-image-shell {
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at top, rgba(16, 185, 129, 0.08), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+  padding: 18px;
+}
+
+.payment-qr-image {
+  width: 100%;
+  display: block;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(18, 27, 53, 0.08);
+}
+
+.payment-qr-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.payment-copy-field {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+}
+
+.payment-copy-field span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.payment-copy-field strong {
+  display: block;
+  color: var(--text-h);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.payment-copy-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.payment-copy-state {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.payment-meta-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.payment-help-box {
+  line-height: 1.65;
+}
+
+.payment-proof-box {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+}
+
+.payment-proof-image {
+  width: 100%;
+  display: block;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 27, 53, 0.08);
+  background: #fff;
+}
+
+.payment-proof-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-modal-actions {
+  flex-wrap: wrap;
+}
+
+.booking-payment-box {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.32);
+}
+
+.booking-payment-note {
+  margin-bottom: 0;
+}
+
+.booking-payment-actions {
+  margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  .payment-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .payment-info-grid,
+  .payment-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-qr-image-shell {
+    padding: 14px;
+  }
+}

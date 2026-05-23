@@ -1,0 +1,51 @@
+import apiClient from './apiClient'
+
+// authApi: gom cac ham auth/profile de page goi lai, khong viet URL API truc tiep trong page.
+
+function authConfig() {
+  // Cac endpoint /me yeu cau Bearer token da luu sau login.
+  const token = localStorage.getItem('token')
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
+export async function login(payload) {
+  // LoginPage goi ham nay de nhan { token, expiresAt, user }.
+  const response = await apiClient.post('/api/auth/login', payload)
+  return response.data
+}
+
+export async function register(payload) {
+  // RegisterPage gui thong tin tao tai khoan moi.
+  const response = await apiClient.post('/api/auth/register', payload)
+  return response.data
+}
+
+export async function forgotPassword(payload) {
+  // ForgotPasswordPage xin reset token tu backend.
+  const response = await apiClient.post('/api/auth/forgot-password', payload)
+  return response.data
+}
+
+export async function resetPassword(payload) {
+  // ResetPasswordPage dat lai mat khau bang token vua duoc cap.
+  const response = await apiClient.post('/api/auth/reset-password', payload)
+  return response.data
+}
+
+export async function getMe() {
+  // ProfilePage va BecomeLandlordPage tai thong tin user hien tai.
+  const response = await apiClient.get('/api/auth/me', authConfig())
+  return response.data
+}
+
+export async function updateMe(payload) {
+  // ProfilePage va LandlordPaymentsPage luu cau hinh thanh toan/user profile.
+  const response = await apiClient.put('/api/auth/me', payload, authConfig())
+  return response.data
+}
+
+export async function deleteMe() {
+  // ProfilePage dung endpoint nay khi user tu xoa tai khoan.
+  const response = await apiClient.delete('/api/auth/me', authConfig())
+  return response.data
+}

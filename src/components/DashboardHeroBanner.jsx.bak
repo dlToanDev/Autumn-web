@@ -1,0 +1,34 @@
+import { Link } from 'react-router-dom'
+
+export default function DashboardHeroBanner({
+  eyebrow = 'TLMT',
+  title,
+  description,
+  note,
+  action,
+}) {
+  const descriptionLines = Array.isArray(description)
+    ? description.filter(Boolean)
+    : [description].filter(Boolean)
+
+  return (
+    <section className="dashboard-hero">
+      <span className="dashboard-eyebrow">{eyebrow}</span>
+      <h1>{title}</h1>
+
+      {descriptionLines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+
+      {note && <div className="dashboard-hero-note">{note}</div>}
+
+      {action?.to && action?.label ? (
+        <div className="dashboard-hero-actions">
+          <Link to={action.to} className="dashboard-hero-button">
+            {action.label}
+          </Link>
+        </div>
+      ) : null}
+    </section>
+  )
+}

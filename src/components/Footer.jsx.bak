@@ -1,0 +1,57 @@
+import { Link } from 'react-router-dom'
+import { FiCompass, FiMail, FiPhone } from 'react-icons/fi'
+
+export default function Footer() {
+  return (
+    <footer className="site-footer">
+      <div className="footer-shell">
+        <div className="footer-contact-bar">
+          <span className="footer-contact-item"><FiPhone /> 0978 636 933</span>
+          <span className="footer-contact-item"><FiMail /> hotro@tlmtrental.vn</span>
+        </div>
+
+        <div className="footer-inner">
+          <div className="footer-brand-col">
+            <Link to="/" className="footer-brand-link">
+              <span className="footer-brand-logo">
+                <FiCompass />
+              </span>
+              <span className="footer-brand-name">TLMT Rental</span>
+            </Link>
+            <p className="footer-tagline">
+              Nền tảng cho thuê phòng trọ hiện đại, kết nối chủ trọ và người thuê trên toàn quốc theo cách trực quan, minh bạch và dễ dùng hơn.
+            </p>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="footer-col-title">Khám phá</h4>
+            <Link to="/" className="footer-link">Trang chủ</Link>
+            <Link to="/user/rooms" className="footer-link">Tìm phòng trọ</Link>
+            <Link to="/register" className="footer-link">Đăng ký tài khoản</Link>
+            <Link to="/login" className="footer-link">Đăng nhập</Link>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="footer-col-title">Dịch vụ</h4>
+            <Link to="/become-landlord" className="footer-link">Đăng ký chủ trọ</Link>
+            <Link to="/user/contracts" className="footer-link">Hợp đồng thuê</Link>
+            <Link to="/user/payments" className="footer-link">Lịch sử thanh toán</Link>
+            <Link to="/messages" className="footer-link">Nhắn tin</Link>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="footer-col-title">Hỗ trợ</h4>
+            <Link to="/notifications" className="footer-link">Thông báo</Link>
+            <Link to="/profile" className="footer-link">Tài khoản</Link>
+            <Link to="/forgot-password" className="footer-link">Quên mật khẩu</Link>
+          </div>
+        </div>
+
+        <div className="footer-bar">
+          <span>© {new Date().getFullYear()} TLMT Rental. Bảo lưu mọi quyền.</span>
+          <span>Xây dựng cho cộng đồng Việt Nam.</span>
+        </div>
+      </div>
+    </footer>
+  )
+}

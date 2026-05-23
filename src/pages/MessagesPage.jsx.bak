@@ -1,0 +1,489 @@
+// Trang MessagesPage la hop thu nhan tin 1-1 trong he thong.
+// Muc dich:
+// - Tai danh sach hoi thoai + danh ba co the nhan tin
+// - Mo mot thread voi user khac
+// - Gui tin nhan moi
+// - Danh dau tin da doc va refresh dinh ky de gia lap gan realtime
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  getMessageContacts,
+  getMessageConversations,
+  getMessagesWithUser,
+  markConversationAsRead,
+  sendMessageToUser,
+} from '../api/messageApi'
+import { getStoredUser } from '../utils/auth'
+import { formatDateTime } from '../utils/rentalFormat'
+
+function formatRoleLabel(value) {
+  // Chi phuc vu hien thi vai tro o sidebar va thread head.
+  const normalized = String(value || '').trim().toUpperCase()
+  if (normalized === 'ADMIN') return 'Admin'
+  if (normalized === 'LANDLORD') return 'Chu tro'
+  if (normalized === 'USER') return 'Nguoi thue'
+  return value || 'Nguoi dung'
+}
+
+function getInitials(name) {
+  return (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('')
+}
+
+function buildThreadPartner(messages, selectedUserId, currentUserId) {
+  // Fallback khi selected user chua co trong contacts/conversations nhung da co message.
+  const relatedMessage = messages.find((item) =>
+    Number(item.senderId) === Number(selectedUserId) || Number(item.receiverId) === Number(selectedUserId))
+
+  if (!relatedMessage) return null
+
+  if (Number(relatedMessage.senderId) === Number(currentUserId)) {
+    return {
+      id: relatedMessage.receiverId,
+      fullName: relatedMessage.receiverName,
+      avatarUrl: relatedMessage.receiverAvatarUrl,
+      roleCode: relatedMessage.receiverRoleCode,
+    }
+  }
+
+  return {
+    id: relatedMessage.senderId,
+    fullName: relatedMessage.senderName,
+    avatarUrl: relatedMessage.senderAvatarUrl,
+    roleCode: relatedMessage.senderRoleCode,
+  }
+}
+
+export default function MessagesPage() {
+  const [searchParams] = useSearchParams()
+  const currentUser = getStoredUser()
+  const currentUserId = Number(currentUser?.id || 0)
+  const preferredUserId = Number(searchParams.get('userId') || 0)
+  const threadEndRef = useRef(null)
+
+  const [conversations, setConversations] = useState([])
+  const [contacts, setContacts] = useState([])
+  const [selectedUserId, setSelectedUserId] = useState(0)
+  const [messages, setMessages] = useState([])
+  const [contactKeyword, setContactKeyword] = useState('')
+  const [draftMessage, setDraftMessage] = useState('')
+  const [loadingSidebar, setLoadingSidebar] = useState(true)
+  const [loadingThread, setLoadingThread] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sidebarError, setSidebarError] = useState('')
+  const [threadError, setThreadError] = useState('')
+
+  // Tim nhanh trong danh ba de bat dau chat moi.
+  const filteredContacts = useMemo(() => {
+    const normalizedKeyword = contactKeyword.trim().toLowerCase()
+    const nextContacts = contacts.filter((item) => {
+      if (!normalizedKeyword) return true
+
+      return [item.fullName, item.email, item.phone, item.roleName, item.roleCode]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedKeyword))
+    })
+
+    return nextContacts.slice(0, normalizedKeyword ? 16 : 10)
+  }, [contactKeyword, contacts])
+
+  // Co gang xac dinh "nguoi dang noi chuyen" tu contacts -> conversations -> message thread.
+  const selectedPartner = useMemo(() => {
+    if (!selectedUserId) return null
+
+    const contactMatch = contacts.find((item) => Number(item.id) === Number(selectedUserId))
+    if (contactMatch) {
+      return {
+        id: contactMatch.id,
+        fullName: contactMatch.fullName,
+        avatarUrl: contactMatch.avatarUrl,
+        roleCode: contactMatch.roleCode,
+      }
+    }
+
+    const conversationMatch = conversations.find((item) => Number(item.otherUserId) === Number(selectedUserId))
+    if (conversationMatch) {
+      return {
+        id: conversationMatch.otherUserId,
+        fullName: conversationMatch.otherUserName,
+        avatarUrl: conversationMatch.otherUserAvatarUrl,
+        roleCode: conversationMatch.otherUserRoleCode,
+      }
+    }
+
+    return buildThreadPartner(messages, selectedUserId, currentUserId)
+  }, [contacts, conversations, currentUserId, messages, selectedUserId])
+
+  useEffect(() => {
+    // Sidebar can conversations + contacts.
+    // Neu URL co ?userId=... (vi du tu RoomDetailPage bam nhan tin chu tro)
+    // thi uu tien mo thread voi user do.
+    const loadSidebar = async () => {
+      setLoadingSidebar(true)
+      setSidebarError('')
+
+      try {
+        const [conversationData, contactData] = await Promise.all([
+          getMessageConversations(),
+          getMessageContacts(),
+        ])
+
+        const nextConversations = Array.isArray(conversationData) ? conversationData : []
+        const nextContacts = Array.isArray(contactData) ? contactData : []
+
+        setConversations(nextConversations)
+        setContacts(nextContacts)
+
+        if (preferredUserId > 0 && preferredUserId !== currentUserId) {
+          setSelectedUserId(preferredUserId)
+        } else if (nextConversations.length > 0) {
+          setSelectedUserId(nextConversations[0].otherUserId)
+        } else {
+          setSelectedUserId(0)
+        }
+      } catch (err) {
+        setSidebarError(err?.response?.data?.message || 'Khong the tai danh sach tin nhan.')
+      } finally {
+        setLoadingSidebar(false)
+      }
+    }
+
+    loadSidebar()
+  }, [currentUserId, preferredUserId])
+
+  useEffect(() => {
+    // Moi khi chon mot user, tai toan bo lich su hoi thoai voi nguoi do.
+    if (!selectedUserId) {
+      setMessages([])
+      setThreadError('')
+      return
+    }
+
+    const loadThread = async () => {
+      setLoadingThread(true)
+      setThreadError('')
+
+      try {
+        const threadData = await getMessagesWithUser(selectedUserId)
+        const nextMessages = Array.isArray(threadData) ? threadData : []
+        setMessages(nextMessages)
+
+        // Neu co tin incoming chua doc thi danh dau da doc ngay khi mo thread.
+        const hasUnreadIncoming = nextMessages.some((item) =>
+          Number(item.senderId) === Number(selectedUserId)
+          && Number(item.receiverId) === Number(currentUserId)
+          && !item.isRead)
+
+        if (hasUnreadIncoming) {
+          await markConversationAsRead(selectedUserId)
+          setMessages((prev) => prev.map((item) => (
+            Number(item.senderId) === Number(selectedUserId)
+            && Number(item.receiverId) === Number(currentUserId)
+              ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() }
+              : item
+          )))
+
+          try {
+            const conversationData = await getMessageConversations()
+            setConversations(Array.isArray(conversationData) ? conversationData : [])
+          } catch {
+            // Keep current sidebar state if refresh fails.
+          }
+        }
+      } catch (err) {
+        setMessages([])
+        setThreadError(err?.response?.data?.message || 'Khong the tai cuoc tro chuyen nay.')
+      } finally {
+        setLoadingThread(false)
+      }
+    }
+
+    loadThread()
+  }, [currentUserId, selectedUserId])
+
+  useEffect(() => {
+    // Hien tai page chua dung websocket/SignalR, nen poll moi 8 giay.
+    // Muc tieu la lam badge hoi thoai va khung chat cap nhat gan realtime.
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const conversationData = await getMessageConversations()
+          setConversations(Array.isArray(conversationData) ? conversationData : [])
+        } catch {
+          // Ignore background refresh errors.
+        }
+
+        if (!selectedUserId) return
+
+        try {
+          const threadData = await getMessagesWithUser(selectedUserId)
+          const nextMessages = Array.isArray(threadData) ? threadData : []
+          setMessages(nextMessages)
+
+          const hasUnreadIncoming = nextMessages.some((item) =>
+            Number(item.senderId) === Number(selectedUserId)
+            && Number(item.receiverId) === Number(currentUserId)
+            && !item.isRead)
+
+          if (hasUnreadIncoming) {
+            await markConversationAsRead(selectedUserId)
+            setMessages((prev) => prev.map((item) => (
+              Number(item.senderId) === Number(selectedUserId)
+              && Number(item.receiverId) === Number(currentUserId)
+                ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() }
+                : item
+            )))
+
+            try {
+              const conversationData = await getMessageConversations()
+              setConversations(Array.isArray(conversationData) ? conversationData : [])
+            } catch {
+              // Ignore sidebar refresh errors.
+            }
+          }
+        } catch {
+          // Ignore background refresh errors.
+        }
+      })()
+    }, 8000)
+
+    return () => window.clearInterval(intervalId)
+  }, [currentUserId, selectedUserId])
+
+  useEffect(() => {
+    // Moi khi co them tin hoac doi thread, cuon xuong tin cuoi cung.
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages.length, selectedUserId])
+
+  const handleSelectUser = (nextUserId) => {
+    // Reset draft va loi cua thread cu truoc khi mo thread moi.
+    setSelectedUserId(Number(nextUserId || 0))
+    setDraftMessage('')
+    setThreadError('')
+  }
+
+  const handleSendMessage = async (event) => {
+    // Gui tin nhan qua backend, append ngay vao thread neu thanh cong.
+    event.preventDefault()
+
+    if (!selectedUserId || sending) return
+
+    const content = draftMessage.trim()
+    if (!content) {
+      setThreadError('Noi dung tin nhan khong duoc de trong.')
+      return
+    }
+
+    setSending(true)
+    setThreadError('')
+
+    try {
+      const createdMessage = await sendMessageToUser(selectedUserId, { content })
+      setMessages((prev) => [...prev, createdMessage])
+      setDraftMessage('')
+
+      try {
+        const conversationData = await getMessageConversations()
+        setConversations(Array.isArray(conversationData) ? conversationData : [])
+      } catch {
+        // Keep current sidebar state if refresh fails.
+      }
+    } catch (err) {
+      setThreadError(err?.response?.data?.message || 'Khong the gui tin nhan luc nay.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="msg-app">
+      {/* ---- LEFT SIDEBAR ---- */}
+      <aside className="msg-sidebar">
+        <div className="msg-search-bar">
+          <input
+            type="text"
+            className="msg-search-input"
+            value={contactKeyword}
+            onChange={(event) => setContactKeyword(event.target.value)}
+            placeholder="Tim kiem..."
+          />
+          <button type="button" className="msg-icon-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="msg-list">
+          {loadingSidebar ? (
+            <p className="msg-list-empty">Dang tai...</p>
+          ) : (
+            <>
+              {conversations.map((conversation) => {
+                const isActive = Number(conversation.otherUserId) === Number(selectedUserId)
+                return (
+                  <button
+                    key={conversation.otherUserId}
+                    type="button"
+                    className={`msg-conv-item${isActive ? ' active' : ''}`}
+                    onClick={() => handleSelectUser(conversation.otherUserId)}
+                  >
+                    <div className="msg-avatar">
+                      {conversation.otherUserAvatarUrl
+                        ? <img src={conversation.otherUserAvatarUrl} alt={conversation.otherUserName} />
+                        : <span>{getInitials(conversation.otherUserName)}</span>}
+                    </div>
+                    <div className="msg-conv-body">
+                      <div className="msg-conv-row">
+                        <span className="msg-conv-name">{conversation.otherUserName}</span>
+                        <span className="msg-conv-time">{formatDateTime(conversation.lastMessageAt)}</span>
+                      </div>
+                      <p className="msg-conv-preview">{conversation.lastMessagePreview || 'Chua co noi dung.'}</p>
+                    </div>
+                    {Number(conversation.unreadCount || 0) > 0 && (
+                      <span className="msg-unread-badge">{conversation.unreadCount}</span>
+                    )}
+                  </button>
+                )
+              })}
+
+              {contactKeyword.trim() && filteredContacts.map((contact) => {
+                const isActive = Number(contact.id) === Number(selectedUserId)
+                return (
+                  <button
+                    key={contact.id}
+                    type="button"
+                    className={`msg-conv-item${isActive ? ' active' : ''}`}
+                    onClick={() => handleSelectUser(contact.id)}
+                  >
+                    <div className="msg-avatar">
+                      {contact.avatarUrl
+                        ? <img src={contact.avatarUrl} alt={contact.fullName} />
+                        : <span>{getInitials(contact.fullName)}</span>}
+                    </div>
+                    <div className="msg-conv-body">
+                      <div className="msg-conv-row">
+                        <span className="msg-conv-name">{contact.fullName}</span>
+                      </div>
+                      <p className="msg-conv-preview">{formatRoleLabel(contact.roleCode)}</p>
+                    </div>
+                  </button>
+                )
+              })}
+
+              {!contactKeyword.trim() && conversations.length === 0 && (
+                <p className="msg-list-empty">Ban chua co hoi thoai nao.</p>
+              )}
+            </>
+          )}
+          {sidebarError && <p className="msg-list-error">{sidebarError}</p>}
+        </div>
+      </aside>
+
+      {/* ---- RIGHT THREAD ---- */}
+      <section className="msg-thread">
+        {!selectedUserId ? (
+          <div className="msg-thread-placeholder">
+            Chon mot cuoc tro chuyen de bat dau nhan tin.
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="msg-thread-header">
+              <button type="button" className="msg-icon-btn msg-back-btn" onClick={() => handleSelectUser(0)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <span className="msg-thread-title">{selectedPartner?.fullName || 'Nguoi dung'}</span>
+              <div className="msg-thread-header-icons">
+                <button type="button" className="msg-icon-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
+                <button type="button" className="msg-icon-btn">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="1.5" />
+                    <circle cx="12" cy="12" r="1.5" />
+                    <circle cx="12" cy="19" r="1.5" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {threadError && <div className="msg-thread-error">{threadError}</div>}
+
+            {/* Messages */}
+            <div className="msg-thread-body">
+              {loadingThread ? (
+                <p className="msg-thread-empty">Dang tai tin nhan...</p>
+              ) : messages.length === 0 ? (
+                <p className="msg-thread-empty">Chua co tin nhan nao. Hay gui loi chao dau tien.</p>
+              ) : (
+                messages.map((message) => {
+                  const isSelf = Number(message.senderId) === Number(currentUserId)
+                  return (
+                    <div key={message.id} className={`msg-row${isSelf ? ' self' : ' incoming'}`}>
+                      {!isSelf && (
+                        <div className="msg-avatar msg-avatar-sm">
+                          {message.senderAvatarUrl
+                            ? <img src={message.senderAvatarUrl} alt={message.senderName} />
+                            : <span>{getInitials(message.senderName)}</span>}
+                        </div>
+                      )}
+                      <div className={`msg-bubble${isSelf ? ' self' : ' incoming'}`}>
+                        <p>{message.content}</p>
+                        <span className="msg-bubble-time">{formatDateTime(message.createdAt)}</span>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+              <div ref={threadEndRef} />
+            </div>
+
+            {/* Composer */}
+            <form className="msg-composer" onSubmit={handleSendMessage}>
+              <button type="button" className="msg-icon-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+              <button type="button" className="msg-icon-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+              </button>
+              <button type="button" className="msg-icon-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+              <input
+                type="text"
+                className="msg-composer-input"
+                value={draftMessage}
+                onChange={(event) => setDraftMessage(event.target.value)}
+                placeholder="Nhap tin nhan..."
+                maxLength={4000}
+              />
+              <button type="submit" className="msg-icon-btn msg-send-btn" disabled={sending}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </button>
+            </form>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}

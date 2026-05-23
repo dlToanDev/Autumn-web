@@ -1,0 +1,44 @@
+/* NotificationDetailPage.css: style cho trang chi tiet thong bao va panel noi dung. */
+.notification-card-actions {
+  justify-content: flex-end;
+}
+
+.notification-detail-summary {
+  margin-top: 22px;
+}
+
+.notification-detail-panel.unread {
+  border-color: rgba(59, 130, 246, 0.32);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.08);
+}
+
+.notification-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.notification-detail-head h2 {
+  margin: 0 0 6px;
+  color: var(--text-h);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+}
+
+.notification-detail-content {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--input-bg);
+  padding: 20px;
+  color: var(--text-h);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 700px) {
+  .notification-detail-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

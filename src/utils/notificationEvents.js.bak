@@ -1,0 +1,11 @@
+// Day la "kenh thong bao noi bo" giua cac component frontend.
+// Vi sao can file nay?
+// - Header can biet khi NotificationsPage vua danh dau da doc.
+// - AdminAnnouncementsPage tao thong bao moi thi badge header cung can cap nhat.
+// Neu khong co event chung, tung component se phai tai lai thu cong.
+export const NOTIFICATIONS_CHANGED_EVENT = 'notifications:changed'
+
+// Phat 1 browser event don gian de cac noi khac trong app lang nghe va cap nhat.
+export function emitNotificationsChanged() {
+  window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT))
+}

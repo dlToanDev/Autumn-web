@@ -1,0 +1,199 @@
+import { useState } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import {
+  FiBarChart2,
+  FiBell,
+  FiBook,
+  FiChevronLeft,
+  FiChevronRight,
+  FiCreditCard,
+  FiDollarSign,
+  FiGrid,
+  FiHome,
+  FiLogOut,
+  FiMessageCircle,
+  FiPercent,
+  FiSettings,
+  FiShield,
+  FiUsers,
+} from 'react-icons/fi'
+import { HiOutlineBuildingOffice2, HiOutlineClipboardDocumentList } from 'react-icons/hi2'
+import { getRoleCode, getStoredUser } from '../utils/auth'
+
+const adminMenu = [
+  {
+    group: 'Tổng quan',
+    items: [
+      { to: '/admin', icon: FiBarChart2, label: 'Dashboard', exact: true },
+    ],
+  },
+  {
+    group: 'Quản lý người dùng',
+    items: [
+      { to: '/admin/users', icon: FiUsers, label: 'Người dùng' },
+      { to: '/admin/landlord-applications', icon: FiShield, label: 'Duyệt chủ trọ' },
+    ],
+  },
+  {
+    group: 'Nội dung',
+    items: [
+      { to: '/admin/rooms', icon: HiOutlineBuildingOffice2, label: 'Quản lý phòng' },
+      { to: '/admin/contracts', icon: HiOutlineClipboardDocumentList, label: 'Hợp đồng' },
+      { to: '/admin/announcements', icon: FiBell, label: 'Thông báo' },
+    ],
+  },
+  {
+    group: 'Tài chính',
+    items: [
+      { to: '/admin/payments', icon: FiCreditCard, label: 'Giao dịch' },
+      { to: '/admin/commission-payments', icon: FiPercent, label: 'Hoa hồng' },
+      { to: '/admin/payment-settings', icon: FiSettings, label: 'Cấu hình' },
+    ],
+  },
+  {
+    group: 'Hệ thống',
+    items: [
+      { to: '/messages', icon: FiMessageCircle, label: 'Tin nhắn' },
+      { to: '/notifications', icon: FiBell, label: 'Thông báo cá nhân' },
+    ],
+  },
+]
+
+const landlordMenu = [
+  {
+    group: 'Tổng quan',
+    items: [
+      { to: '/landlord', icon: FiBarChart2, label: 'Dashboard', exact: true },
+    ],
+  },
+  {
+    group: 'Tài sản',
+    items: [
+      { to: '/landlord/properties', icon: HiOutlineBuildingOffice2, label: 'Khu trọ' },
+      { to: '/landlord/rooms', icon: FiHome, label: 'Phòng' },
+    ],
+  },
+  {
+    group: 'Khách hàng',
+    items: [
+      { to: '/landlord/bookings', icon: FiBook, label: 'Yêu cầu thuê' },
+      { to: '/landlord/tenants', icon: FiUsers, label: 'Người thuê' },
+    ],
+  },
+  {
+    group: 'Tài chính',
+    items: [
+      { to: '/landlord/payments', icon: FiDollarSign, label: 'Dòng tiền' },
+      { to: '/landlord/commission-payments', icon: FiPercent, label: 'Hoa hồng' },
+    ],
+  },
+  {
+    group: 'Khác',
+    items: [
+      { to: '/messages', icon: FiMessageCircle, label: 'Tin nhắn' },
+      { to: '/notifications', icon: FiBell, label: 'Thông báo' },
+      { to: '/user', icon: FiGrid, label: 'Trang người dùng' },
+    ],
+  },
+]
+
+function getDisplayName(user) {
+  if (!user) return 'Tài khoản'
+  return user.fullName || user.name || user.username || user.email || 'Tài khoản'
+}
+
+function getAvatarInitials(user) {
+  const name = getDisplayName(user)
+  const parts = name.trim().split(' ')
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+export default function ManagementSidebar({ role }) {
+  const navigate = useNavigate()
+  const user = getStoredUser()
+  const [collapsed, setCollapsed] = useState(false)
+  const menuGroups = role === 'ADMIN' ? adminMenu : landlordMenu
+  const roleLabel = role === 'ADMIN' ? 'Admin' : 'Chủ trọ'
+  const displayName = getDisplayName(user)
+  const initials = getAvatarInitials(user)
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    navigate('/login')
+  }
+
+  return (
+    <aside className={`mgmt-sidebar${collapsed ? ' mgmt-sidebar--collapsed' : ''}`}>
+      {/* Brand */}
+      <div className="mgmt-sidebar-brand">
+        <Link to="/" className="mgmt-brand-logo">
+          <FiGrid />
+        </Link>
+        {!collapsed && (
+          <div className="mgmt-brand-copy">
+            <span className="mgmt-brand-name">TLMT</span>
+            <span className="mgmt-brand-role">{roleLabel}</span>
+          </div>
+        )}
+        <button
+          type="button"
+          className="mgmt-collapse-btn"
+          onClick={() => setCollapsed((prev) => !prev)}
+          title={collapsed ? 'Mở rộng' : 'Thu gọn'}
+        >
+          {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="mgmt-sidebar-nav">
+        {menuGroups.map((group) => (
+          <div key={group.group} className="mgmt-nav-group">
+            {!collapsed && <span className="mgmt-nav-group-label">{group.group}</span>}
+            {group.items.map((item) => {
+              const Icon = item.icon
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.exact}
+                  className={({ isActive }) =>
+                    `mgmt-nav-item${isActive ? ' mgmt-nav-item--active' : ''}`
+                  }
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span className="mgmt-nav-icon"><Icon /></span>
+                  {!collapsed && <span className="mgmt-nav-label">{item.label}</span>}
+                </NavLink>
+              )
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* User footer */}
+      <div className="mgmt-sidebar-footer">
+        <div className="mgmt-user-info">
+          <div className="mgmt-user-avatar">{initials}</div>
+          {!collapsed && (
+            <div className="mgmt-user-copy">
+              <span className="mgmt-user-name" title={displayName}>{displayName}</span>
+              <span className="mgmt-user-role">{roleLabel}</span>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          className="mgmt-logout-btn"
+          onClick={handleLogout}
+          title="Đăng xuất"
+        >
+          <FiLogOut />
+          {!collapsed && <span>Đăng xuất</span>}
+        </button>
+      </div>
+    </aside>
+  )
+}

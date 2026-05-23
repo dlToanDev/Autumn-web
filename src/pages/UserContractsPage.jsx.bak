@@ -1,0 +1,174 @@
+// Trang UserContractsPage la man hop dong cua nguoi thue.
+// User co the xem chi tiet hop dong va upload file chu ky cua minh.
+import { useEffect, useState } from 'react'
+import ContractDetailModal from '../components/ContractDetailModal'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import { getMyContractById, getMyContracts, uploadTenantContractFile } from '../api/contractApi'
+import { fileToDataUrl } from '../utils/file'
+import { formatContractStatusLabel, formatDate } from '../utils/rentalFormat'
+
+export default function UserContractsPage() {
+  const [contracts, setContracts] = useState([])
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  // List view va detail view dung chung du lieu hop dong nhung tai chi tiet rieng khi can.
+  const loadContracts = async () => {
+    const data = await getMyContracts()
+    setContracts(data)
+  }
+
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await loadContracts()
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách hợp đồng của bạn.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  const openContractDetail = async (contractId) => {
+    setDetailLoading(true)
+    setSelectedContract({})
+    setError('')
+
+    try {
+      const data = await getMyContractById(contractId)
+      setSelectedContract(data)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tải chi tiết hợp đồng.')
+      setSelectedContract(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const handleTenantUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file || !selectedContract?.id) return
+
+    setUploading(true)
+    setMessage('')
+    setError('')
+
+    try {
+      const fileUrl = await fileToDataUrl(file)
+      const updatedContract = await uploadTenantContractFile(selectedContract.id, { fileUrl })
+      setSelectedContract(updatedContract)
+      await loadContracts()
+      setMessage('Đã tải bản hợp đồng bạn ký lên hệ thống.')
+    } catch (err) {
+      setError(err?.response?.data?.message || err.message || 'Không thể tải file hợp đồng.')
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải hợp đồng của bạn...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang lưu trữ hợp đồng của bạn"
+          description={[
+            'Bạn có thể xem lại toàn bộ hợp đồng thuê phòng, mở chi tiết và tải file đã ký ngay tại đây.',
+            'Nếu có điều khoản nào chưa rõ hoặc cần hỗ trợ nhanh, hãy liên hệ admin để được xử lý.',
+          ]}
+          action={{ to: '/messages', label: 'Liên hệ admin' }}
+        />
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+
+        <section className="dashboard-panel">
+          {contracts.length === 0 ? (
+            <div className="dashboard-empty">Bạn chưa có hợp đồng nào.</div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã hợp đồng</th>
+                    <th>Phòng</th>
+                    <th>Thời hạn</th>
+                    <th>Trạng thái</th>
+                    <th>Bản của bạn</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((contract, index) => (
+                    <tr key={contract.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{contract.contractCode}</strong>
+                        <div className="table-sub">{contract.propertyName}</div>
+                      </td>
+                      <td>
+                        <strong>{contract.roomTitle}</strong>
+                        <div className="table-sub">{contract.fullAddress}</div>
+                      </td>
+                      <td>{formatDate(contract.startDate)} - {formatDate(contract.endDate)}</td>
+                      <td>
+                        <span className={`status-pill ${contract.status}`}>{formatContractStatusLabel(contract.status)}</span>
+                      </td>
+                      <td>{contract.hasTenantSignedFile ? 'Đã tải lên' : 'Chưa tải'}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button type="button" className="ghost-button compact" onClick={() => openContractDetail(contract.id)}>
+                            Xem hợp đồng
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedContract && (
+          <ContractDetailModal
+            contract={selectedContract}
+            loading={detailLoading}
+            onClose={() => setSelectedContract(null)}
+            title="Bản hợp đồng của bạn"
+            actionArea={!detailLoading && selectedContract.id ? (
+              <div className="contract-action-area">
+                <label className="form-field">
+                  <span>Tải bản người thuê đã ký</span>
+                  <input type="file" accept="image/*,application/pdf" onChange={handleTenantUpload} disabled={uploading} />
+                </label>
+                {uploading && <div className="uploading-note">Đang tải file hợp đồng...</div>}
+              </div>
+            ) : null}
+          />
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,93 @@
+/* ContractShared.css: style dung chung cho form hop dong, modal detail va card chu ky/file. */
+.contract-form-shell {
+  border: 1px solid rgba(106, 115, 255, 0.18);
+  background:
+    linear-gradient(135deg, rgba(106, 115, 255, 0.08), rgba(76, 168, 255, 0.06)),
+    var(--panel-bg);
+}
+
+.contract-person-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.contract-content-box {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(248, 250, 255, 0.9);
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.contract-content-box h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.contract-content-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 500 14px/1.75 'Be Vietnam Pro', sans-serif;
+  color: var(--text);
+}
+
+.contract-signature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.contract-signature-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--input-bg);
+  padding: 16px;
+  min-height: 220px;
+}
+
+.contract-signature-card span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.contract-signature-preview {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border-radius: 16px;
+  border: 1px solid rgba(18, 27, 53, 0.08);
+  background: #fff;
+}
+
+.contract-action-area {
+  display: grid;
+  gap: 12px;
+  border: 1px dashed rgba(106, 115, 255, 0.32);
+  border-radius: 18px;
+  background: rgba(106, 115, 255, 0.05);
+  padding: 16px;
+}
+
+@media (max-width: 1100px) {
+  .contract-signature-grid,
+  .contract-person-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .contract-content-box,
+  .contract-signature-card,
+  .contract-action-area {
+    padding: 14px;
+  }
+}

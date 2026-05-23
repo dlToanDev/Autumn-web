@@ -1,0 +1,428 @@
+// Trang AdminCommissionPaymentsPage quan ly hoa hong admin thu tu landlord theo thang.
+// Admin co the tao QR, mo lai chi tiet payment va xac nhan thu tien.
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import PaymentQrModal from '../components/PaymentQrModal'
+import {
+  createAdminCommissionVietQrPayment,
+  deleteExpiredPayment,
+  getAdminCommissionBilling,
+  getPaymentByCode,
+  markAdminPaymentPaid,
+} from '../api/paymentApi'
+import { formatCurrency, formatDateTime } from '../utils/rentalFormat'
+
+function formatPaymentStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đang chờ thanh toán'
+  if (normalized === 'waiting_confirm') return 'Chờ admin xác nhận'
+  if (normalized === 'success') return 'Đã xác nhận thanh toán'
+  if (normalized === 'failed') return 'Thanh toán thất bại'
+  if (normalized === 'canceled') return 'Đã hủy'
+  if (normalized === 'expired') return 'QR đã hết hạn'
+  return value || '---'
+}
+
+function canConfirmPayment(payment) {
+  const normalized = String(payment?.status || '').toLowerCase()
+  return normalized === 'waiting_confirm'
+}
+
+function canDeleteExpiredPayment(payment) {
+  return String(payment?.status || '').toLowerCase() === 'expired'
+}
+
+function getDefaultPeriod() {
+  const now = new Date()
+  return {
+    year: now.getUTCFullYear(),
+    month: now.getUTCMonth() + 1,
+  }
+}
+
+export default function AdminCommissionPaymentsPage() {
+  const defaultPeriod = getDefaultPeriod()
+  // filters dai dien cho ky billing admin dang xem.
+  const [filters, setFilters] = useState(defaultPeriod)
+  const [items, setItems] = useState([])
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [paymentRefreshing, setPaymentRefreshing] = useState(false)
+  const [creatingLandlordId, setCreatingLandlordId] = useState(0)
+  const [openingCode, setOpeningCode] = useState('')
+  const [confirmingCode, setConfirmingCode] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [paymentError, setPaymentError] = useState('')
+
+  const loadItems = async (nextFilters = filters) => {
+    const data = await getAdminCommissionBilling(nextFilters)
+    setItems(Array.isArray(data) ? data : [])
+    return data
+  }
+
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await loadItems(defaultPeriod)
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải danh sách hoa hồng chủ trọ.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  const stats = useMemo(() => ({
+    total: items.length,
+    grossRevenue: items.reduce((sum, item) => sum + Number(item.grossRevenue || 0), 0),
+    commissionAmount: items.reduce((sum, item) => sum + Number(item.commissionAmount || 0), 0),
+    waitingPayment: items.filter((item) => ['pending', 'waiting_confirm'].includes(String(item.latestPaymentStatus).toLowerCase())).length,
+    paid: items.filter((item) => String(item.latestPaymentStatus).toLowerCase() === 'success').length,
+  }), [items])
+
+  const handleFilterChange = async (field, value) => {
+    const nextFilters = { ...filters, [field]: Number(value) }
+    setFilters(nextFilters)
+    setLoading(true)
+    setMessage('')
+    setError('')
+
+    try {
+      await loadItems(nextFilters)
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tải dữ liệu kỳ thanh toán này.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateCommissionQr = async (item) => {
+    if (!item?.landlordId) return
+
+    setCreatingLandlordId(item.landlordId)
+    setMessage('')
+    setError('')
+    setPaymentError('')
+
+    try {
+      const payment = await createAdminCommissionVietQrPayment({
+        landlordId: item.landlordId,
+        year: filters.year,
+        month: filters.month,
+      })
+
+      setSelectedPayment(payment)
+      await loadItems(filters)
+      setMessage('Đã tạo mã QR hoa hồng cho chủ trọ.')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể tạo QR hoa hồng.')
+    } finally {
+      setCreatingLandlordId(0)
+    }
+  }
+
+  const openPaymentDetail = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setOpeningCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await getPaymentByCode(paymentCode)
+      setSelectedPayment(payment)
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể mở payment này.')
+    } finally {
+      setOpeningCode('')
+    }
+  }
+
+  const refreshSelectedPayment = async () => {
+    if (!selectedPayment?.paymentCode) return
+
+    setPaymentRefreshing(true)
+    setPaymentError('')
+
+    try {
+      const payment = await getPaymentByCode(selectedPayment.paymentCode)
+      setSelectedPayment(payment)
+      await loadItems(filters)
+      setMessage('Đã cập nhật trạng thái payment mới nhất.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể cập nhật trạng thái payment.')
+    } finally {
+      setPaymentRefreshing(false)
+    }
+  }
+
+  const confirmPaymentByCode = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setConfirmingCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await markAdminPaymentPaid(paymentCode)
+      if (selectedPayment?.paymentCode === payment.paymentCode) {
+        setSelectedPayment(payment)
+      }
+      await loadItems(filters)
+      setMessage('Đã xác nhận chủ trọ đã thanh toán hoa hồng.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể xác nhận payment hoa hồng.')
+    } finally {
+      setConfirmingCode('')
+    }
+  }
+
+  const handleMarkPaymentPaid = async () => {
+    if (!selectedPayment?.paymentCode) return
+    await confirmPaymentByCode(selectedPayment.paymentCode)
+  }
+
+  const handleDeleteExpiredPayment = async (paymentCode) => {
+    if (!paymentCode) return
+
+    const shouldDelete = window.confirm('QR hoa hồng này đã hết hạn. Bạn có muốn xóa để tạo mã mới không?')
+    if (!shouldDelete) return
+
+    setOpeningCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      await deleteExpiredPayment(paymentCode)
+      if (selectedPayment?.paymentCode === paymentCode) {
+        setSelectedPayment(null)
+      }
+      await loadItems(filters)
+      setMessage('Đã xóa QR hoa hồng hết hạn. Admin có thể tạo lại mã mới cho kỳ này.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể xóa QR hoa hồng hết hạn.')
+    } finally {
+      setOpeningCode('')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải trang hoa hồng chủ trọ...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang tạo QR hoa hồng cho chủ trọ"
+          description={[
+            'Bạn có thể tính doanh thu, sinh payment mới và theo dõi trạng thái thanh toán của từng chủ trọ.',
+            'Nếu cần làm rõ từng kỳ thu hoặc một payment cụ thể, hãy mở hộp tin.',
+          ]}
+          action={{ to: '/messages', label: 'Mở hộp tin' }}
+        />
+
+        <div className="inline-actions">
+          <Link to="/profile" className="ghost-button card-link-button">
+            Cấu hình bank admin trong Profile
+          </Link>
+          <Link to="/admin/payments" className="ghost-button card-link-button">
+            Lịch sử thanh toán
+          </Link>
+          <Link to="/admin/payment-settings" className="ghost-button card-link-button">
+            Mở cấu hình hệ thống
+          </Link>
+        </div>
+
+        <div className="hero-stats dashboard-metric-grid">
+          <div className="hero-stat-card">
+            <strong>{stats.total}</strong>
+            <span>chủ trọ cần thanh toán</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{formatCurrency(stats.grossRevenue)} đ</strong>
+            <span>tổng doanh thu tháng</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{formatCurrency(stats.commissionAmount)} đ</strong>
+            <span>tổng hoa hồng 5%</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{stats.waitingPayment}</strong>
+            <span>payment đang chờ</span>
+          </div>
+          <div className="hero-stat-card">
+            <strong>{stats.paid}</strong>
+            <span>đã thanh toán</span>
+          </div>
+        </div>
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+        {paymentError && !selectedPayment && <div className="alert error">{paymentError}</div>}
+
+        <section className="dashboard-panel">
+          <div className="booking-filter-bar">
+            <label className="form-field">
+              <span>Năm</span>
+              <input
+                type="number"
+                min="2020"
+                max="2100"
+                value={filters.year}
+                onChange={(event) => handleFilterChange('year', event.target.value)}
+              />
+            </label>
+            <label className="form-field">
+              <span>Tháng</span>
+              <input
+                type="number"
+                min="1"
+                max="12"
+                value={filters.month}
+                onChange={(event) => handleFilterChange('month', event.target.value)}
+              />
+            </label>
+          </div>
+
+          {items.length === 0 ? (
+            <div className="dashboard-empty">Tháng này chưa có doanh thu thuê phòng để tính hoa hồng.</div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Chủ trọ</th>
+                    <th>Doanh thu tháng</th>
+                    <th>Hoa hồng 5%</th>
+                    <th>Payment gần nhất</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, index) => (
+                    <tr key={item.landlordId}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <strong>{item.landlordName}</strong>
+                        <div className="table-sub">{item.landlordPhone || item.landlordEmail || '---'}</div>
+                      </td>
+                      <td>{formatCurrency(item.grossRevenue)} đ</td>
+                      <td>{formatCurrency(item.commissionAmount)} đ</td>
+                      <td>
+                        {item.latestPaymentCode ? (
+                          <>
+                            <strong>{item.latestPaymentCode}</strong>
+                            <div className="table-sub">
+                              <span className={`status-pill ${item.latestPaymentStatus}`}>
+                                {formatPaymentStatusLabel(item.latestPaymentStatus)}
+                              </span>
+                            </div>
+                            <div className="table-sub">Tạo: {formatDateTime(item.latestPaymentCreatedAt)}</div>
+                            <div className="table-sub">Thanh toán: {formatDateTime(item.latestPaymentPaidAt)}</div>
+                          </>
+                        ) : (
+                          <>
+                            <strong>Chưa tạo QR</strong>
+                            <div className="table-sub">Chưa có payment hoa hồng cho kỳ này.</div>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            className="primary-button compact"
+                            disabled={creatingLandlordId === item.landlordId}
+                            onClick={() => handleCreateCommissionQr(item)}
+                          >
+                            {creatingLandlordId === item.landlordId ? 'Đang tạo...' : 'Tạo QR hoa hồng'}
+                          </button>
+                          {item.latestPaymentCode && (
+                            <button
+                              type="button"
+                              className="ghost-button compact"
+                              disabled={openingCode === item.latestPaymentCode}
+                              onClick={() => openPaymentDetail(item.latestPaymentCode)}
+                            >
+                              {openingCode === item.latestPaymentCode ? 'Đang mở...' : 'Xem QR'}
+                            </button>
+                          )}
+                          {item.latestPaymentCode && canDeleteExpiredPayment({ status: item.latestPaymentStatus }) && (
+                            <button
+                              type="button"
+                              className="ghost-button compact"
+                              disabled={openingCode === item.latestPaymentCode}
+                              onClick={() => handleDeleteExpiredPayment(item.latestPaymentCode)}
+                            >
+                              {openingCode === item.latestPaymentCode ? 'Đang xóa...' : 'Xóa QR cũ'}
+                            </button>
+                          )}
+                          {item.latestPaymentCode && canConfirmPayment({ status: item.latestPaymentStatus }) && (
+                            <button
+                              type="button"
+                              className="ghost-button compact"
+                              disabled={confirmingCode === item.latestPaymentCode}
+                              onClick={() => confirmPaymentByCode(item.latestPaymentCode)}
+                            >
+                              {confirmingCode === item.latestPaymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedPayment && (
+          <PaymentQrModal
+            payment={selectedPayment}
+            onClose={() => {
+              setSelectedPayment(null)
+              setPaymentRefreshing(false)
+              setPaymentError('')
+            }}
+            onRefresh={refreshSelectedPayment}
+            refreshing={paymentRefreshing}
+            error={paymentError}
+            onPaymentDeleted={async () => {
+              setSelectedPayment(null)
+              setPaymentRefreshing(false)
+              setPaymentError('')
+              await loadItems(filters)
+              setMessage('Đã xóa QR hoa hồng hết hạn. Admin có thể tạo lại mã mới cho kỳ này.')
+            }}
+            actionArea={canConfirmPayment(selectedPayment) ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={confirmingCode === selectedPayment.paymentCode}
+                onClick={handleMarkPaymentPaid}
+              >
+                {confirmingCode === selectedPayment.paymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+              </button>
+            ) : null}
+          />
+        )}
+      </div>
+    </div>
+  )
+}

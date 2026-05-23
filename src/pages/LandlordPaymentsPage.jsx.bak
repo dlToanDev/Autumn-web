@@ -1,0 +1,621 @@
+// Trang LandlordPaymentsPage la man thanh toan tong hop cua chu tro.
+// Muc dich:
+// - Xem khoan tien vao/ra lien quan den landlord
+// - Cap nhat cau hinh ngan hang/VietQR
+// - Xac nhan payment nguoi thue da gui
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import DashboardHeroBanner from '../components/DashboardHeroBanner'
+import PaymentQrModal from '../components/PaymentQrModal'
+import { getMe, updateMe } from '../api/authApi'
+import {
+  getMyPayments,
+  getPaymentByCode,
+  markLandlordPaymentPaid,
+} from '../api/paymentApi'
+import { formatCurrency, formatDateTime } from '../utils/rentalFormat'
+
+function formatPaymentStatusLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'pending') return 'Đang chờ thanh toán'
+  if (normalized === 'waiting_confirm') return 'Chờ bạn xác nhận'
+  if (normalized === 'success') return 'Đã xác nhận thanh toán'
+  if (normalized === 'failed') return 'Thanh toán thất bại'
+  if (normalized === 'canceled') return 'Đã hủy'
+  if (normalized === 'expired') return 'QR đã hết hạn'
+  return value || '---'
+}
+
+function formatPaymentTypeLabel(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized === 'deposit') return 'Tiền cọc'
+  if (normalized === 'rent') return 'Tiền thuê'
+  if (normalized === 'service') return 'Phí dịch vụ'
+  if (normalized === 'listing_fee') return 'Hoa hồng admin'
+  return value || '---'
+}
+
+function mapUserToPaymentConfig(user) {
+  // Chi map nhung field profile lien quan den cau hinh nhan tien.
+  return {
+    fullName: user?.fullName ?? '',
+    email: user?.email ?? '',
+    phone: user?.phone ?? '',
+    avatarUrl: user?.avatarUrl ?? '',
+    gender: user?.gender ?? 'other',
+    dateOfBirth: user?.dateOfBirth ? String(user.dateOfBirth).slice(0, 10) : '',
+    address: user?.address ?? '',
+    hometown: user?.hometown ?? '',
+    vietQrBankId: user?.vietQrBankId ?? '',
+    bankAccountNo: user?.bankAccountNo ?? '',
+    bankAccountName: user?.bankAccountName ?? '',
+    vietQrTemplate: user?.vietQrTemplate ?? 'compact2',
+  }
+}
+
+function isPaidStatus(status) {
+  return String(status || '').toLowerCase() === 'success'
+}
+
+function isIncomingPayment(payment, currentUserId) {
+  return Number(payment?.payeeUserId || 0) === Number(currentUserId || 0)
+}
+
+function isOutgoingPayment(payment, currentUserId) {
+  return Number(payment?.payerId || 0) === Number(currentUserId || 0)
+}
+
+function canConfirmIncomingPayment(payment, currentUserId) {
+  return (
+    String(payment?.status || '').toLowerCase() === 'waiting_confirm' &&
+    isIncomingPayment(payment, currentUserId)
+  )
+}
+
+function sumAmount(payments) {
+  return payments.reduce((total, payment) => total + Number(payment.amount || 0), 0)
+}
+
+function formatBillingPeriod(payment) {
+  if (payment.billingMonth && payment.billingYear) {
+    return `${String(payment.billingMonth).padStart(2, '0')}/${payment.billingYear}`
+  }
+
+  return payment.bookingCode || '---'
+}
+
+export default function LandlordPaymentsPage() {
+  const [payments, setPayments] = useState([])
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [currentUserId, setCurrentUserId] = useState(0)
+  const [paymentConfig, setPaymentConfig] = useState(() => mapUserToPaymentConfig(null))
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [directionFilter, setDirectionFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [savingPaymentConfig, setSavingPaymentConfig] = useState(false)
+  const [paymentRefreshing, setPaymentRefreshing] = useState(false)
+  const [paymentOpeningCode, setPaymentOpeningCode] = useState('')
+  const [confirmingPaymentCode, setConfirmingPaymentCode] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [paymentError, setPaymentError] = useState('')
+
+  const loadPayments = async () => {
+    const myPayments = await getMyPayments()
+    const nextPayments = Array.isArray(myPayments)
+      ? [...myPayments].sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      : []
+
+    setPayments(nextPayments)
+    return nextPayments
+  }
+
+  const loadPaymentConfig = async () => {
+    const currentUser = await getMe()
+    setCurrentUserId(currentUser?.id || 0)
+    setPaymentConfig(mapUserToPaymentConfig(currentUser))
+    return currentUser
+  }
+
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        await Promise.all([
+          loadPayments(),
+          loadPaymentConfig(),
+        ])
+      } catch (err) {
+        setError(err?.response?.data?.message || 'Không thể tải lịch sử thanh toán của chủ trọ.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitial()
+  }, [])
+
+  useEffect(() => {
+    const paymentCode = selectedPayment?.paymentCode
+    const normalizedStatus = String(selectedPayment?.status || '').toLowerCase()
+
+    if (!paymentCode || (normalizedStatus !== 'pending' && normalizedStatus !== 'waiting_confirm')) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const latestPayment = await getPaymentByCode(paymentCode)
+        setSelectedPayment(latestPayment)
+        setPayments((prev) => prev.map((payment) => (
+          payment.paymentCode === latestPayment.paymentCode ? latestPayment : payment
+        )))
+      } catch {
+        // Cho phép chủ trọ tự refresh nếu polling thất bại.
+      }
+    }, 10000)
+
+    return () => window.clearInterval(intervalId)
+  }, [selectedPayment?.paymentCode, selectedPayment?.status])
+
+  const stats = useMemo(() => {
+    const incomingPayments = payments.filter((payment) => isIncomingPayment(payment, currentUserId))
+    const outgoingPayments = payments.filter((payment) => isOutgoingPayment(payment, currentUserId))
+    const paidIncomingPayments = incomingPayments.filter((payment) => isPaidStatus(payment.status))
+    const unpaidIncomingPayments = incomingPayments.filter((payment) => !isPaidStatus(payment.status))
+    const paidOutgoingPayments = outgoingPayments.filter((payment) => isPaidStatus(payment.status))
+    const unpaidOutgoingPayments = outgoingPayments.filter((payment) => !isPaidStatus(payment.status))
+
+    return {
+      total: payments.length,
+      receivedAmount: sumAmount(paidIncomingPayments),
+      incomingPendingAmount: sumAmount(unpaidIncomingPayments),
+      outgoingPaidAmount: sumAmount(paidOutgoingPayments),
+      outgoingPendingAmount: sumAmount(unpaidOutgoingPayments),
+      paidCount: payments.filter((payment) => isPaidStatus(payment.status)).length,
+    }
+  }, [currentUserId, payments])
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      const status = String(payment.status || '').toLowerCase()
+      const paymentType = String(payment.paymentType || '').toLowerCase()
+
+      if (statusFilter === 'paid' && status !== 'success') return false
+      if (statusFilter === 'unpaid' && status === 'success') return false
+
+      if (directionFilter === 'incoming' && !isIncomingPayment(payment, currentUserId)) return false
+      if (directionFilter === 'outgoing' && !isOutgoingPayment(payment, currentUserId)) return false
+
+      if (typeFilter !== 'all' && paymentType !== typeFilter) return false
+
+      return true
+    })
+  }, [currentUserId, directionFilter, payments, statusFilter, typeFilter])
+
+  const isPaymentConfigReady = Boolean(
+    paymentConfig.vietQrBankId &&
+    paymentConfig.bankAccountNo &&
+    paymentConfig.bankAccountName,
+  )
+
+  const handlePaymentConfigChange = (event) => {
+    const { name, value } = event.target
+    setPaymentConfig((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSavePaymentConfig = async (event) => {
+    event.preventDefault()
+    setSavingPaymentConfig(true)
+    setMessage('')
+    setError('')
+
+    try {
+      const updatedUser = await updateMe({
+        fullName: paymentConfig.fullName,
+        email: paymentConfig.email || null,
+        phone: paymentConfig.phone || null,
+        avatarUrl: paymentConfig.avatarUrl || null,
+        gender: paymentConfig.gender || 'other',
+        dateOfBirth: paymentConfig.dateOfBirth || null,
+        address: paymentConfig.address || null,
+        hometown: paymentConfig.hometown || null,
+        vietQrBankId: paymentConfig.vietQrBankId || null,
+        bankAccountNo: paymentConfig.bankAccountNo || null,
+        bankAccountName: paymentConfig.bankAccountName || null,
+        vietQrTemplate: paymentConfig.vietQrTemplate || null,
+      })
+
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      setCurrentUserId(updatedUser?.id || 0)
+      setPaymentConfig(mapUserToPaymentConfig(updatedUser))
+      setMessage('Đã lưu cấu hình VietQR cho chủ trọ.')
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Không thể lưu cấu hình VietQR.')
+    } finally {
+      setSavingPaymentConfig(false)
+    }
+  }
+
+  const handlePaymentChanged = (payment) => {
+    setSelectedPayment(payment)
+    setPayments((prev) => prev.map((item) => (
+      item.paymentCode === payment.paymentCode ? payment : item
+    )))
+    setMessage('Đã cập nhật trạng thái payment mới nhất.')
+  }
+
+  const handlePaymentDeleted = async (payment) => {
+    setPayments((prev) => prev.filter((item) => item.paymentCode !== payment.paymentCode))
+    setSelectedPayment(null)
+    setPaymentRefreshing(false)
+    setPaymentError('')
+    setMessage('Đã xóa QR hết hạn khỏi lịch sử thanh toán.')
+  }
+
+  const openPaymentDetail = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setPaymentOpeningCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await getPaymentByCode(paymentCode)
+      setSelectedPayment(payment)
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể mở payment này.')
+    } finally {
+      setPaymentOpeningCode('')
+    }
+  }
+
+  const refreshSelectedPayment = async () => {
+    if (!selectedPayment?.paymentCode) return
+
+    setPaymentRefreshing(true)
+    setPaymentError('')
+
+    try {
+      const payment = await getPaymentByCode(selectedPayment.paymentCode)
+      setSelectedPayment(payment)
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+      setMessage('Đã cập nhật trạng thái payment mới nhất.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể cập nhật trạng thái payment.')
+    } finally {
+      setPaymentRefreshing(false)
+    }
+  }
+
+  const confirmPaymentByCode = async (paymentCode) => {
+    if (!paymentCode) return
+
+    setConfirmingPaymentCode(paymentCode)
+    setPaymentError('')
+    setMessage('')
+
+    try {
+      const payment = await markLandlordPaymentPaid(paymentCode)
+      setSelectedPayment((prev) => (
+        prev?.paymentCode === payment.paymentCode ? payment : prev
+      ))
+      setPayments((prev) => prev.map((item) => (
+        item.paymentCode === payment.paymentCode ? payment : item
+      )))
+      setMessage('Đã xác nhận thanh toán thành công.')
+    } catch (err) {
+      setPaymentError(err?.response?.data?.message || 'Không thể xác nhận thanh toán.')
+    } finally {
+      setConfirmingPaymentCode('')
+    }
+  }
+
+  const handleMarkPaymentPaid = async () => {
+    if (!selectedPayment?.paymentCode) return
+    await confirmPaymentByCode(selectedPayment.paymentCode)
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="dashboard-empty">Đang tải lịch sử thanh toán của chủ trọ...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="dashboard-page">
+      <div className="dashboard-container room-manager-page">
+        <DashboardHeroBanner
+          title="Đây là trang theo dõi thanh toán của bạn"
+          description={[
+            'Bạn có thể kiểm tra dòng tiền, xác nhận khoản đã thu và theo dõi các payment liên quan đến khu trọ.',
+            'Nếu có giao dịch chưa khớp hoặc cần xác minh thêm, hãy liên hệ admin.',
+          ]}
+          action={{ to: '/messages', label: 'Liên hệ admin' }}
+        />
+
+        <div className="inline-actions">
+          <Link to="/landlord/tenants" className="primary-button card-link-button">
+            Mở quản lý người thuê
+          </Link>
+          <Link to="/landlord/commission-payments" className="ghost-button card-link-button">
+            Thanh toán hoa hồng
+          </Link>
+          <Link to="/profile" className="ghost-button card-link-button">
+            Mở profile
+          </Link>
+        </div>
+
+        <section className="dashboard-panel contract-form-shell">
+          <div className="panel-heading">
+            <div>
+              <h2>Cấu hình VietQR nhận tiền</h2>
+              <p>Chủ trọ có thể chỉnh ngay tại đây để trang quản lý người thuê dùng cấu hình này khi tạo QR thu tiền.</p>
+            </div>
+          </div>
+
+          <form className="dashboard-form" onSubmit={handleSavePaymentConfig}>
+            <div className="form-grid two-cols">
+              <label className="form-field">
+                <span>Mã ngân hàng VietQR</span>
+                <input
+                  type="text"
+                  name="vietQrBankId"
+                  value={paymentConfig.vietQrBankId}
+                  onChange={handlePaymentConfigChange}
+                  placeholder="mbbank, VCB, ACB..."
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>Template VietQR</span>
+                <input
+                  type="text"
+                  name="vietQrTemplate"
+                  value={paymentConfig.vietQrTemplate}
+                  onChange={handlePaymentConfigChange}
+                  placeholder="compact2"
+                />
+              </label>
+            </div>
+
+            <div className="form-grid two-cols">
+              <label className="form-field">
+                <span>Số tài khoản nhận tiền</span>
+                <input
+                  type="text"
+                  name="bankAccountNo"
+                  value={paymentConfig.bankAccountNo}
+                  onChange={handlePaymentConfigChange}
+                  placeholder="0123456789"
+                  required
+                />
+              </label>
+
+              <label className="form-field">
+                <span>Tên tài khoản</span>
+                <input
+                  type="text"
+                  name="bankAccountName"
+                  value={paymentConfig.bankAccountName}
+                  onChange={handlePaymentConfigChange}
+                  placeholder="NGUYEN VAN A"
+                  required
+                />
+              </label>
+            </div>
+
+            <div className="detail-disabled-box">
+              {isPaymentConfigReady
+                ? 'Tài khoản chủ trọ đã có đủ cấu hình để tạo QR nhận tiền từ trang quản lý người thuê.'
+                : 'Bạn cần nhập tối thiểu mã ngân hàng, số tài khoản và tên tài khoản trước khi tạo QR VietQR.'}
+            </div>
+
+            <div className="inline-actions">
+              <button type="submit" className="primary-button" disabled={savingPaymentConfig}>
+                {savingPaymentConfig ? 'Đang lưu...' : 'Lưu cấu hình VietQR'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <div className="detail-summary-grid user-payment-stats">
+          <div className="detail-summary-item">
+            <span>Tổng payment</span>
+            <strong>{stats.total}</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Đã thu</span>
+            <strong>{formatCurrency(stats.receivedAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Chưa thu xong</span>
+            <strong>{formatCurrency(stats.incomingPendingAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Đã chi</span>
+            <strong>{formatCurrency(stats.outgoingPaidAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Còn phải chi</span>
+            <strong>{formatCurrency(stats.outgoingPendingAmount)} đ</strong>
+          </div>
+          <div className="detail-summary-item">
+            <span>Payment đã xong</span>
+            <strong>{stats.paidCount}</strong>
+          </div>
+        </div>
+
+        {message && <div className="alert success">{message}</div>}
+        {error && <div className="alert error">{error}</div>}
+        {paymentError && !selectedPayment && <div className="alert error">{paymentError}</div>}
+
+        <section className="dashboard-panel">
+          <div className="room-toolbar">
+            <div>
+              <h2>Lịch sử thanh toán</h2>
+              <p>Bạn có thể lọc nhanh khoản đã thanh toán, chưa thanh toán, thu vào hoặc chi ra để theo dõi dòng tiền dễ hơn.</p>
+            </div>
+          </div>
+
+          <div className="booking-filter-bar">
+            <label className="form-field">
+              <span>Trạng thái</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="paid">Đã thanh toán</option>
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Dòng tiền</span>
+              <select value={directionFilter} onChange={(event) => setDirectionFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="incoming">Thu vào</option>
+                <option value="outgoing">Chi ra</option>
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Loại payment</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="rent">Tiền thuê</option>
+                <option value="deposit">Tiền cọc</option>
+                <option value="service">Phí dịch vụ</option>
+                <option value="listing_fee">Hoa hồng admin</option>
+              </select>
+            </label>
+          </div>
+
+          {filteredPayments.length === 0 ? (
+            <div className="dashboard-empty">
+              {payments.length === 0
+                ? 'Hiện chưa có payment nào để theo dõi.'
+                : 'Không có payment nào khớp với bộ lọc hiện tại.'}
+            </div>
+          ) : (
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>STT</th>
+                    <th>Mã payment</th>
+                    <th>Dòng tiền</th>
+                    <th>Nội dung</th>
+                    <th>Số tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Thời gian</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.map((payment, index) => {
+                    const incoming = isIncomingPayment(payment, currentUserId)
+
+                    return (
+                      <tr key={payment.paymentCode}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <strong>{payment.paymentCode}</strong>
+                          <div className="table-sub">Booking: {payment.bookingCode || '---'}</div>
+                        </td>
+                        <td>
+                          <strong>{incoming ? 'Thu vào' : 'Chi ra'}</strong>
+                          <div className="table-sub">
+                            {incoming
+                              ? `Người trả: ${payment.payerName || '---'}`
+                              : `Người nhận: ${payment.payeeUserName || '---'}`}
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{payment.roomTitle || payment.description || formatPaymentTypeLabel(payment.paymentType)}</strong>
+                          <div className="table-sub">{formatPaymentTypeLabel(payment.paymentType)}</div>
+                          <div className="table-sub">Kỳ: {formatBillingPeriod(payment)}</div>
+                        </td>
+                        <td>{formatCurrency(payment.amount)} đ</td>
+                        <td>
+                          <span className={`status-pill ${payment.status}`}>{formatPaymentStatusLabel(payment.status)}</span>
+                        </td>
+                        <td>
+                          <div className="table-sub">Tạo: {formatDateTime(payment.createdAt)}</div>
+                          <div className="table-sub">
+                            {isPaidStatus(payment.status)
+                              ? `Đã trả: ${formatDateTime(payment.paidAt)}`
+                              : `Hạn: ${formatDateTime(payment.expiredAt)}`}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="ghost-button compact"
+                              disabled={paymentOpeningCode === payment.paymentCode}
+                              onClick={() => openPaymentDetail(payment.paymentCode)}
+                            >
+                              {paymentOpeningCode === payment.paymentCode ? 'Đang mở...' : 'Xem chi tiết'}
+                            </button>
+                            {canConfirmIncomingPayment(payment, currentUserId) && (
+                              <button
+                                type="button"
+                                className="primary-button compact"
+                                disabled={confirmingPaymentCode === payment.paymentCode}
+                                onClick={() => confirmPaymentByCode(payment.paymentCode)}
+                              >
+                                {confirmingPaymentCode === payment.paymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {selectedPayment && (
+          <PaymentQrModal
+            payment={selectedPayment}
+            onClose={() => {
+              setSelectedPayment(null)
+              setPaymentRefreshing(false)
+              setPaymentError('')
+            }}
+            onRefresh={refreshSelectedPayment}
+            refreshing={paymentRefreshing}
+            error={paymentError}
+            onPaymentChanged={handlePaymentChanged}
+            onPaymentDeleted={handlePaymentDeleted}
+            actionArea={canConfirmIncomingPayment(selectedPayment, currentUserId) ? (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={confirmingPaymentCode === selectedPayment.paymentCode}
+                onClick={handleMarkPaymentPaid}
+              >
+                {confirmingPaymentCode === selectedPayment.paymentCode ? 'Đang xác nhận...' : 'Đã thanh toán'}
+              </button>
+            ) : null}
+          />
+        )}
+      </div>
+    </div>
+  )
+}

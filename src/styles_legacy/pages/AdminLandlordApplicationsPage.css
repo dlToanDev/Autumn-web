@@ -1,0 +1,288 @@
+/* AdminLandlordApplicationsPage.css: style cho man duyet ho so landlord va panel chi tiet don. */
+.admin-application-layout {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) 1fr;
+  gap: 22px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.filter-row label {
+  font-size: 14px;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.filter-row select {
+  padding: 12px 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-h);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+}
+
+.application-list {
+  display: grid;
+  gap: 12px;
+  max-height: 550px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.application-item {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--text-h);
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.application-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(15, 23, 42, 0.08);
+}
+
+.application-item.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1), 0 22px 38px rgba(29, 78, 216, 0.12);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 10px;
+  width: fit-content;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-chip.pending {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.status-chip.approved {
+  background: rgba(16, 185, 129, 0.18);
+  color: #047857;
+}
+
+.status-chip.rejected {
+  background: rgba(239, 68, 68, 0.16);
+  color: #b91c1c;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+
+.applicant-card {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 16px;
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 16px;
+  align-items: start;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+}
+
+.applicant-avatar-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.applicant-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+}
+
+.applicant-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.applicant-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  font-size: 14px;
+}
+
+.applicant-info-grid .full-row {
+  grid-column: 1 / -1;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.doc-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 18px;
+  padding: 14px;
+  color: var(--text-h);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.doc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 34px rgba(15, 23, 42, 0.08);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.doc-card small {
+  color: var(--text);
+}
+
+.note-box {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 18px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
+}
+
+.note-box p {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.doc-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.doc-preview-modal {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 28px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 34px 80px rgba(15, 23, 42, 0.24);
+}
+
+.doc-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-preview-link {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.doc-preview-body {
+  min-height: 70vh;
+  background: #0f172a;
+  display: grid;
+  place-items: center;
+}
+
+.doc-preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+}
+
+.doc-preview-frame {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+  background: #fff;
+}
+
+.empty-note {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  color: var(--text);
+}
+
+@media (max-width: 980px) {
+  .admin-application-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .applicant-card {
+    grid-template-columns: 1fr;
+  }
+
+  .applicant-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .filter-row {
+    grid-template-columns: 1fr;
+  }
+}
