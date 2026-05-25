@@ -38,7 +38,15 @@ export default function AdminLandlordApplicationsPage() {
   })
 
   const { mutate: review, isPending } = useMutation({
-    mutationFn: () => landlordApplicationApi.reviewApplication(action!.app.id, { status: action!.status, note }),
+    mutationFn: async () => {
+      if (!action) throw new Error('Thiếu hồ sơ cần xử lý.')
+
+      if (action.status === 'APPROVED' && canConfirmFee(action.app)) {
+        await paymentApi.adminMarkPaid(getFeePaymentCode(action.app)!)
+      }
+
+      return landlordApplicationApi.reviewApplication(action.app.id, { status: action.status, note })
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-applications'] }); toast.success('Đã cập nhật!'); setAction(null); setNote('') },
     onError: (error: Error) => toast.error(error.message || 'Không thể cập nhật hồ sơ.'),
   })
@@ -104,16 +112,28 @@ export default function AdminLandlordApplicationsPage() {
                     </Td>
                     <Td><Badge variant={getStatusBadgeVariant(a.status)} size="sm">{getStatusLabel(a.status)}</Badge></Td>
                     <Td>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button size="sm" variant="ghost" leftIcon={<Eye size={14} />} onClick={() => setDetail(a)}>Chi tiết</Button>
                         {a.status === 'PENDING' && (
                           <>
+                            {canConfirmFee(a) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                leftIcon={<ReceiptText size={14} />}
+                                loading={markingFee}
+                                onClick={() => markFeePaid(getFeePaymentCode(a)!)}
+                                title="Xác nhận đã nhận phí đăng ký để mở duyệt hồ sơ"
+                              >
+                                Xác nhận phí
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               leftIcon={<CheckCircle size={14} />}
                               onClick={() => setAction({ app: a, status: 'APPROVED' })}
-                              disabled={!isFeePaid(a)}
-                              title={isFeePaid(a) ? 'Duyệt hồ sơ' : 'Cần xác nhận phí đăng ký trước'}
+                              disabled={!canApprove(a)}
+                              title={canApprove(a) ? 'Duyệt hồ sơ' : 'Cần người nộp gửi minh chứng phí trước khi duyệt'}
                             >
                               Duyệt
                             </Button>
@@ -161,7 +181,7 @@ export default function AdminLandlordApplicationsPage() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Row label="Số tiền" value={formatCurrency(detail.registrationFeeAmount || 0)} />
-                <Row label="Mã payment" value={detail.registrationFeePaymentCode || detail.feePaymentCode} />
+                <Row label="Mã payment" value={getFeePaymentCode(detail)} />
                 <Row label="Trạng thái phí" value={getStatusLabel(detail.registrationFeePaymentStatus || detail.feePaymentStatus || 'PENDING')} />
                 <Row label="Gửi minh chứng lúc" value={formatDateTime(detail.registrationFeeProofSubmittedAt)} />
                 <Row label="Đã xác nhận lúc" value={formatDateTime(detail.registrationFeePaidAt)} />
@@ -198,7 +218,7 @@ export default function AdminLandlordApplicationsPage() {
                     size="sm"
                     leftIcon={<CheckCircle size={14} />}
                     loading={markingFee}
-                    onClick={() => markFeePaid((detail.registrationFeePaymentCode || detail.feePaymentCode)!)}
+                    onClick={() => markFeePaid(getFeePaymentCode(detail)!)}
                   >
                     Xác nhận phí
                   </Button>
@@ -251,8 +271,16 @@ function isFeePaid(app: AdminLandlordApplication) {
 
 function canConfirmFee(app: AdminLandlordApplication) {
   const status = String(app.registrationFeePaymentStatus || app.feePaymentStatus || '').toUpperCase()
-  return !!(app.registrationFeePaymentCode || app.feePaymentCode) &&
-    !!app.registrationFeeProofImageUrl &&
+  return !!getFeePaymentCode(app) &&
+    (!!app.registrationFeeProofImageUrl || !!app.registrationFeeProofSubmittedAt) &&
     !isFeePaid(app) &&
     (status === 'WAITING_CONFIRM' || status === 'PROOF_SUBMITTED')
+}
+
+function canApprove(app: AdminLandlordApplication) {
+  return isFeePaid(app) || canConfirmFee(app)
+}
+
+function getFeePaymentCode(app: AdminLandlordApplication) {
+  return app.registrationFeePaymentCode || app.feePaymentCode
 }

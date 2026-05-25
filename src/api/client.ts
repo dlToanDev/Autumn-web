@@ -2,8 +2,22 @@ import axios, { type AxiosError } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
 
+function resolveApiBaseUrl() {
+    const configured = import.meta.env.VITE_API_BASE_URL?.trim()
+    if (configured) return configured.replace(/\/+$/, '')
+
+    if (typeof window === 'undefined') return ''
+
+    const { protocol, hostname } = window.location
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0'
+    if (isLocalHost) return ''
+
+    const apiPort = import.meta.env.VITE_API_PORT?.trim() || '5122'
+    return `${protocol}//${hostname}:${apiPort}`
+}
+
 const apiClient = axios.create({
-    baseURL: '',
+    baseURL: resolveApiBaseUrl(),
     timeout: 30000,
 })
 

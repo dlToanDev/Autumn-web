@@ -1,50 +1,58 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore, getRoleCode, getDefaultRoute } from '@/store/authStore'
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 
 // Auth pages
-import LoginPage from '@/pages/LoginPage'
-import RegisterPage from '@/pages/RegisterPage'
-import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
-import ResetPasswordPage from '@/pages/ResetPasswordPage'
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const RegisterPage = lazy(() => import('@/pages/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
 
 // Public pages
-import HomePage from '@/pages/HomePage'
-import RoomSearchPage from '@/pages/RoomSearchPage'
-import RoomDetailPage from '@/pages/RoomDetailPage'
+const HomePage = lazy(() => import('@/pages/HomePage'))
+const RoomSearchPage = lazy(() => import('@/pages/RoomSearchPage'))
+const RoomDetailPage = lazy(() => import('@/pages/RoomDetailPage'))
 
 // User pages
-import ProfilePage from '@/pages/ProfilePage'
-import UserHomePage from '@/pages/UserHomePage'
-import UserContractsPage from '@/pages/UserContractsPage'
-import UserPaymentsPage from '@/pages/UserPaymentsPage'
-import BecomeLandlordPage from '@/pages/BecomeLandlordPage'
-import NotificationsPage from '@/pages/NotificationsPage'
-import NotificationDetailPage from '@/pages/NotificationDetailPage'
-import MessagesPage from '@/pages/MessagesPage'
-import PaymentAccountSettingsPage from '@/pages/PaymentAccountSettingsPage'
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
+const UserHomePage = lazy(() => import('@/pages/UserHomePage'))
+const UserContractsPage = lazy(() => import('@/pages/UserContractsPage'))
+const UserPaymentsPage = lazy(() => import('@/pages/UserPaymentsPage'))
+const BecomeLandlordPage = lazy(() => import('@/pages/BecomeLandlordPage'))
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
+const NotificationDetailPage = lazy(() => import('@/pages/NotificationDetailPage'))
+const MessagesPage = lazy(() => import('@/pages/MessagesPage'))
+const PaymentAccountSettingsPage = lazy(() => import('@/pages/PaymentAccountSettingsPage'))
 
 // Landlord pages
-import LandlordDashboardPage from '@/pages/landlord/LandlordDashboardPage'
-import LandlordPropertiesPage from '@/pages/landlord/LandlordPropertiesPage'
-import LandlordRoomsPage from '@/pages/landlord/LandlordRoomsPage'
-import LandlordBookingsPage from '@/pages/landlord/LandlordBookingsPage'
-import LandlordPaymentsPage from '@/pages/landlord/LandlordPaymentsPage'
-import LandlordCommissionPaymentsPage from '@/pages/landlord/LandlordCommissionPaymentsPage'
-import LandlordTenantsPage from '@/pages/landlord/LandlordTenantsPage'
-import LandlordContractsPage from '@/pages/landlord/LandlordContractsPage'
+const LandlordDashboardPage = lazy(() => import('@/pages/landlord/LandlordDashboardPage'))
+const LandlordPropertiesPage = lazy(() => import('@/pages/landlord/LandlordPropertiesPage'))
+const LandlordRoomsPage = lazy(() => import('@/pages/landlord/LandlordRoomsPage'))
+const LandlordBookingsPage = lazy(() => import('@/pages/landlord/LandlordBookingsPage'))
+const LandlordPaymentsPage = lazy(() => import('@/pages/landlord/LandlordPaymentsPage'))
+const LandlordCommissionPaymentsPage = lazy(() => import('@/pages/landlord/LandlordCommissionPaymentsPage'))
+const LandlordTenantsPage = lazy(() => import('@/pages/landlord/LandlordTenantsPage'))
+const LandlordContractsPage = lazy(() => import('@/pages/landlord/LandlordContractsPage'))
 
 // Admin pages
-import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
-import AdminUsersPage from '@/pages/admin/AdminUsersPage'
-import AdminLandlordsPage from '@/pages/admin/AdminLandlordsPage'
-import AdminRoomsPage from '@/pages/admin/AdminRoomsPage'
-import AdminLandlordApplicationsPage from '@/pages/admin/AdminLandlordApplicationsPage'
-import AdminContractsPage from '@/pages/admin/AdminContractsPage'
-import AdminPaymentsPage from '@/pages/admin/AdminPaymentsPage'
-import AdminCommissionPaymentsPage from '@/pages/admin/AdminCommissionPaymentsPage'
-import AdminAnnouncementsPage from '@/pages/admin/AdminAnnouncementsPage'
-import AdminPaymentSettingsPage from '@/pages/admin/AdminPaymentSettingsPage'
+const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'))
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage'))
+const AdminLandlordsPage = lazy(() => import('@/pages/admin/AdminLandlordsPage'))
+const AdminRoomsPage = lazy(() => import('@/pages/admin/AdminRoomsPage'))
+const AdminLandlordApplicationsPage = lazy(() => import('@/pages/admin/AdminLandlordApplicationsPage'))
+const AdminContractsPage = lazy(() => import('@/pages/admin/AdminContractsPage'))
+const AdminPaymentsPage = lazy(() => import('@/pages/admin/AdminPaymentsPage'))
+const AdminCommissionPaymentsPage = lazy(() => import('@/pages/admin/AdminCommissionPaymentsPage'))
+const AdminAnnouncementsPage = lazy(() => import('@/pages/admin/AdminAnnouncementsPage'))
+const AdminPaymentSettingsPage = lazy(() => import('@/pages/admin/AdminPaymentSettingsPage'))
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#FAF6EF] text-sm font-medium text-[#7C6757]">
+      Đang tải...
+    </div>
+  )
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { isLoggedIn } = useAuthStore()
@@ -74,7 +82,8 @@ export default function App() {
   const defaultRoute = getDefaultRoute(isLoggedIn, user)
 
   return (
-    <Routes>
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
       {/* Public */}
       <Route path="/" element={<HomePage />} />
       <Route path="/rooms" element={<RoomSearchPage />} />
@@ -135,6 +144,7 @@ export default function App() {
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to={defaultRoute} replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
