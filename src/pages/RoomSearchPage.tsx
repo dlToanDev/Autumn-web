@@ -54,10 +54,10 @@ function RoomCard({ room }: { room: Room }) {
       className="bg-white rounded-[16px] border border-[#E7E5E4] overflow-hidden cursor-pointer
         shadow-[0_1px_3px_0_rgb(0_0_0/0.06)]
         hover:shadow-[0_8px_24px_-4px_rgb(0_0_0/0.12)] hover:-translate-y-0.5
-        transition-all duration-200 group flex flex-row h-[160px] sm:h-[176px]"
+        transition-all duration-200 group flex flex-col sm:flex-row sm:h-[176px]"
     >
       {/* Image */}
-      <div className="relative w-[200px] sm:w-[240px] shrink-0 overflow-hidden bg-[#F3E7D3]">
+      <div className="relative h-40 w-full shrink-0 overflow-hidden bg-[#F3E7D3] sm:h-auto sm:w-[240px]">
         <img
           src={cover}
           alt={room.title}
@@ -82,12 +82,12 @@ function RoomCard({ room }: { room: Room }) {
       {/* Body */}
       <div className="flex flex-col flex-1 p-3.5 min-w-0">
         {/* Title row */}
-        <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-2 mb-1">
           <h3 className="font-semibold text-[#1C1917] text-sm font-display line-clamp-2 leading-snug flex-1">
             {room.title}
           </h3>
           {room.roomType && (
-            <span className="text-[10px] bg-[#F3E7D3] text-[#5B4636] px-2 py-0.5 rounded-full shrink-0 font-medium">
+            <span className="max-w-full shrink-0 rounded-full bg-[#F3E7D3] px-2 py-0.5 text-[10px] font-medium text-[#5B4636]">
               {ROOM_TYPE_LABEL[room.roomType] || room.roomType}
             </span>
           )}
@@ -102,7 +102,7 @@ function RoomCard({ room }: { room: Room }) {
         </div>
 
         {/* Stats row */}
-        <div className="flex items-center gap-3 text-xs text-[#78716C] mb-2">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#78716C]">
           {room.area && (
             <span className="flex items-center gap-0.5">
               <BedDouble size={11} className="text-[#A8A29E]" />
@@ -137,13 +137,13 @@ function RoomCard({ room }: { room: Room }) {
         )}
 
         {/* Price + landlord */}
-        <div className="flex items-end justify-between mt-auto pt-2 border-t border-[#F5F0EC]">
-          <div>
+        <div className="mt-auto flex min-w-0 flex-wrap items-end justify-between gap-2 border-t border-[#F5F0EC] pt-2">
+          <div className="min-w-0">
             <span className="text-base font-bold text-[#C96A3D]">{formatCurrency(room.price)}</span>
             <span className="text-xs text-[#A8A29E] ml-0.5">đ/tháng</span>
           </div>
           {room.landlordName && (
-            <span className="text-xs text-[#78716C]">
+            <span className="min-w-0 text-xs text-[#78716C]">
               <span className="font-medium text-[#44403C]">{room.landlordName}</span>
             </span>
           )}

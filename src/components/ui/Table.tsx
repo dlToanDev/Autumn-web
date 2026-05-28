@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils'
 // Table wrapper
 export function Table({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('w-full overflow-x-auto overflow-y-hidden', className)}>
-      <table className="min-w-full text-sm border-collapse">{children}</table>
+    <div className={cn('w-full max-w-full overflow-x-auto overflow-y-hidden', className)}>
+      <table className="w-full min-w-[760px] border-collapse text-sm">{children}</table>
     </div>
   )
 }
@@ -32,7 +32,7 @@ export function Th({ children, className }: { children?: React.ReactNode; classN
 
 export function Td({ children, className }: { children?: React.ReactNode; className?: string }) {
   return (
-    <td className={cn('px-5 py-4 first:pl-6 last:pr-6 text-[#3F352E] align-middle', className)}>{children}</td>
+    <td className={cn('px-5 py-4 first:pl-6 last:pr-6 text-[#3F352E] align-middle break-words', className)}>{children}</td>
   )
 }
 

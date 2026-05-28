@@ -1,4 +1,5 @@
 import ManagementSidebar from './ManagementSidebar'
+import FloatingMessageButton from './FloatingMessageButton'
 
 interface Props {
   role: 'ADMIN' | 'LANDLORD'
@@ -7,11 +8,12 @@ interface Props {
 
 export default function ManagementLayout({ role, children }: Props) {
   return (
-    <div className="flex h-screen bg-[#FAF6EF] overflow-hidden">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-[#FAF6EF] md:h-screen md:flex-row md:overflow-hidden">
       <ManagementSidebar role={role} />
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">{children}</div>
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
+      <FloatingMessageButton />
     </div>
   )
 }

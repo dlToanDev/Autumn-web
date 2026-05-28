@@ -26,9 +26,9 @@ const variantClasses: Record<Variant, string> = {
 }
 
 const sizeClasses: Record<Size, string> = {
-  sm: 'h-8 px-3 text-sm gap-1.5',
-  md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-6 text-base gap-2.5',
+  sm: 'min-h-8 px-3 py-1.5 text-sm gap-1.5',
+  md: 'min-h-10 px-4 py-2 text-sm gap-2',
+  lg: 'min-h-12 px-6 py-2.5 text-base gap-2.5',
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -41,7 +41,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex min-w-0 shrink-0 items-center justify-center font-medium rounded-[10px] transition-all duration-150',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C96A3D]/40 focus-visible:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none',
-          'select-none whitespace-nowrap leading-none',
+          'max-w-full select-none text-center leading-snug break-words',
           variantClasses[variant],
           sizeClasses[size],
           className,
@@ -56,7 +56,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ) : (
           leftIcon && <span className="shrink-0">{leftIcon}</span>
         )}
-        {children}
+        {children && <span className="min-w-0">{children}</span>}
         {!loading && rightIcon && <span className="shrink-0">{rightIcon}</span>}
       </button>
     )

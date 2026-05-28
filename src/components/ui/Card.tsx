@@ -34,7 +34,7 @@ export default function Card({ children, className, padding = 'md', hover, onCli
 
 export function CardHeader({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('flex items-center justify-between mb-4', className)}>
+    <div className={cn('mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 [&>*]:max-w-full [&>*]:min-w-0 [&>*]:flex-wrap', className)}>
       {children}
     </div>
   )
@@ -42,7 +42,7 @@ export function CardHeader({ children, className }: { children: React.ReactNode;
 
 export function CardTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className={cn('text-base font-semibold text-[#292524] font-display', className)}>
+    <h3 className={cn('min-w-0 text-base font-semibold text-[#292524] font-display break-words', className)}>
       {children}
     </h3>
   )

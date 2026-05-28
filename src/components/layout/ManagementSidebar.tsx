@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Home, BedDouble, BookOpen, CreditCard,
   Users, FileText, Megaphone, Settings, ChevronLeft,
   LogOut, ChevronRight, Wallet, UserCheck, QrCode, Building2,
+  MessageSquare,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
@@ -18,6 +19,7 @@ interface NavItem {
 
 const adminNav: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { to: '/messages', label: 'Tin nhắn', icon: <MessageSquare size={18} /> },
   { to: '/admin/users', label: 'Người dùng', icon: <Users size={18} /> },
   { to: '/admin/landlords', label: 'Chủ trọ', icon: <Building2 size={18} /> },
   { to: '/admin/rooms', label: 'Phòng trọ', icon: <BedDouble size={18} /> },
@@ -32,6 +34,7 @@ const adminNav: NavItem[] = [
 
 const landlordNav: NavItem[] = [
   { to: '/landlord', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { to: '/messages', label: 'Tin nhắn', icon: <MessageSquare size={18} /> },
   { to: '/landlord/properties', label: 'Nhà/Cơ sở', icon: <Home size={18} /> },
   { to: '/landlord/rooms', label: 'Phòng trọ', icon: <BedDouble size={18} /> },
   { to: '/landlord/bookings', label: 'Yêu cầu thuê', icon: <BookOpen size={18} /> },
@@ -69,15 +72,14 @@ export default function ManagementSidebar({ role }: Props) {
   return (
     <aside
       className={cn(
-        'flex flex-col bg-[#2C1F14] text-white h-screen sticky top-0',
-        'transition-all duration-300 shrink-0',
-        collapsed ? 'w-16' : 'w-60',
+        'sticky top-0 z-50 flex shrink-0 flex-col bg-[#2C1F14] text-white',
+        'w-full border-b border-white/10 transition-all duration-300 md:h-screen md:border-b-0',
+        collapsed ? 'md:w-16' : 'md:w-60',
       )}
     >
       {/* Logo */}
-      <div className={cn('flex items-center h-16 border-b border-white/10 px-4 shrink-0', collapsed && 'justify-center px-2')}>
-        {!collapsed && (
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+      <div className={cn('flex h-16 shrink-0 items-center border-b border-white/10 px-4', collapsed && 'md:justify-center md:px-2')}>
+        <Link to="/" className={cn('flex min-w-0 items-center gap-2', collapsed && 'md:hidden')}>
             <div className="w-7 h-7 rounded-[6px] bg-[#C96A3D] flex items-center justify-center shrink-0">
               <Home size={14} className="text-white" />
             </div>
@@ -85,12 +87,11 @@ export default function ManagementSidebar({ role }: Props) {
               Au<span className="text-[#D4A373]">Tumn</span>
             </span>
           </Link>
-        )}
         <button
           onClick={() => setCollapsed((p) => !p)}
           className={cn(
-            'p-1.5 rounded-[6px] text-white/60 hover:text-white hover:bg-white/10 transition-colors shrink-0',
-            collapsed ? 'mx-auto' : 'ml-auto',
+            'ml-auto hidden shrink-0 rounded-[6px] p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white md:inline-flex',
+            collapsed && 'md:mx-auto',
           )}
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
@@ -99,7 +100,7 @@ export default function ManagementSidebar({ role }: Props) {
 
       {/* Role badge */}
       {!collapsed && (
-        <div className="px-4 pt-4 pb-2">
+        <div className="hidden px-4 pb-2 pt-4 md:block">
           <span className="text-[10px] font-bold uppercase tracking-widest text-[#D4A373]/70">
             {role === 'ADMIN' ? 'Quản trị viên' : 'Chủ trọ'}
           </span>
@@ -107,28 +108,28 @@ export default function ManagementSidebar({ role }: Props) {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+      <nav className="flex gap-2 overflow-x-auto px-3 py-2 md:block md:flex-1 md:space-y-0.5 md:overflow-y-auto md:px-2">
         {navItems.map((item) => (
           <Link
             key={item.to}
             to={item.to}
             title={collapsed ? item.label : undefined}
             className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-sm font-medium transition-all duration-150',
+              'flex shrink-0 items-center gap-2 rounded-[8px] px-3 py-2 text-sm font-medium transition-all duration-150 md:gap-3 md:py-2.5',
               isActive(item.to)
                 ? 'bg-[#C96A3D] text-white shadow-sm'
                 : 'text-white/70 hover:text-white hover:bg-white/8',
-              collapsed && 'justify-center px-0',
+              collapsed && 'md:justify-center md:px-0',
             )}
           >
             <span className="shrink-0">{item.icon}</span>
-            {!collapsed && <span className="truncate">{item.label}</span>}
+            <span className={cn('max-w-32 truncate md:max-w-none', collapsed && 'md:hidden')}>{item.label}</span>
           </Link>
         ))}
       </nav>
 
       {/* User footer */}
-      <div className="border-t border-white/10 p-3 shrink-0">
+      <div className="hidden shrink-0 border-t border-white/10 p-3 md:block">
         <Link
           to="/profile"
           className={cn(

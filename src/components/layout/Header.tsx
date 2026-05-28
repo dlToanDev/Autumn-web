@@ -64,7 +64,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-[#E7E5E4] shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex h-16 min-w-0 items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-[8px] gradient-autumn flex items-center justify-center">
@@ -94,7 +94,7 @@ export default function Header() {
           </nav>
 
           {/* Right section */}
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             {isLoggedIn ? (
               <>
                 {/* Notifications */}
@@ -127,7 +127,7 @@ export default function Header() {
                 <div ref={menuRef} className="relative">
                   <button
                     onClick={() => setMenuOpen((p) => !p)}
-                    className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-[10px] hover:bg-[#F5F5F4] transition-colors"
+                    className="flex min-w-0 items-center gap-2 rounded-[10px] py-1 pl-1 pr-2 transition-colors hover:bg-[#F5F5F4]"
                   >
                     <Avatar src={user?.avatarUrl} name={user?.fullName} size="sm" />
                     <span className="hidden sm:block text-sm font-medium text-[#292524] max-w-[100px] truncate">
@@ -140,7 +140,7 @@ export default function Header() {
                   </button>
 
                   {menuOpen && (
-                    <div className="absolute right-0 mt-2 w-52 bg-white rounded-[12px] border border-[#E7E5E4] shadow-[0_8px_24px_-4px_rgb(0_0_0/0.12)] py-1 z-50">
+                    <div className="absolute right-0 z-50 mt-2 w-52 max-w-[calc(100vw-2rem)] rounded-[12px] border border-[#E7E5E4] bg-white py-1 shadow-[0_8px_24px_-4px_rgb(0_0_0/0.12)]">
                       <div className="px-3 py-2 border-b border-[#F5F5F4] mb-1">
                         <p className="text-xs text-[#A8A29E]">Đã đăng nhập với</p>
                         <p className="text-sm font-medium text-[#292524] truncate">{user?.email}</p>

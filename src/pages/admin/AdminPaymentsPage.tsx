@@ -190,7 +190,7 @@ export default function AdminPaymentsPage() {
 
   return (
     <ManagementLayout role="ADMIN">
-      <div className="min-h-screen bg-[#FAF6EF] px-6 py-6">
+      <div className="min-h-screen bg-[#FAF6EF] px-0 py-0 sm:px-2 sm:py-2">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
@@ -204,19 +204,19 @@ export default function AdminPaymentsPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link to="/admin/commission-payments" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#C96A3D] px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#B85C38] hover:text-white">
+              <Link to="/admin/commission-payments" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] bg-[#C96A3D] px-4 py-2 text-center text-sm font-medium leading-snug text-white shadow-sm transition-colors hover:bg-[#B85C38] hover:text-white">
                 <Wallet size={16} />
                 Thu hoa hồng
               </Link>
-              <Link to="/admin/qr-settings" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 text-sm font-medium text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
+              <Link to="/admin/qr-settings" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
                 <QrCode size={16} />
                 VietQR
               </Link>
-              <Link to="/admin/payment-settings" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 text-sm font-medium text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
+              <Link to="/admin/payment-settings" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
                 <Settings size={16} />
                 Cài đặt
               </Link>
-              <Link to="/messages" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7E5E4] bg-white px-4 text-sm font-medium text-[#78716C] transition-colors hover:bg-[#F5F5F4] hover:text-[#57534E]">
+              <Link to="/messages" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] border border-[#E7E5E4] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#78716C] transition-colors hover:bg-[#F5F5F4] hover:text-[#57534E]">
                 <MessageCircle size={16} />
                 Tin nhắn
               </Link>

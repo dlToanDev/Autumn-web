@@ -29,6 +29,7 @@ export default function Badge({ children, variant = 'default', className, size =
     <span
       className={cn(
         'inline-flex items-center font-medium rounded-full',
+        'max-w-full text-center leading-tight break-words',
         variantMap[variant],
         sizeMap[size],
         className,

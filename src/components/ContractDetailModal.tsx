@@ -51,7 +51,7 @@ export default function ContractDetailModal({ open, onClose, contract, loading =
           </div>
 
           {/* Key info grid */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <InfoCard label="Thời hạn" value={`${formatDate(contract.startDate)} – ${formatDate(contract.endDate)}`} />
             <InfoCard label="Giá thuê" value={formatCurrency(contract.monthlyRent)} highlight />
             <InfoCard label="Tiền cọc" value={contract.depositAmount ? formatCurrency(contract.depositAmount) : '—'} />
@@ -123,7 +123,7 @@ function InfoCard({ label, value, highlight }: { label: string; value: string; h
   return (
     <div className="flex flex-col gap-1 rounded-xl border border-[#E8DED1] bg-[#FAF7F4] p-3">
       <span className="text-xs font-medium text-[#78716C]">{label}</span>
-      <span className={`text-sm font-semibold ${highlight ? 'text-[#C96A3D]' : 'text-[#2C241D]'}`}>{value}</span>
+              <span className={`text-sm font-semibold break-words ${highlight ? 'text-[#C96A3D]' : 'text-[#2C241D]'}`}>{value}</span>
     </div>
   )
 }
@@ -132,8 +132,8 @@ function PersonCard({ label, name, contact }: { label: string; name?: string; co
   return (
     <div className="flex flex-col gap-1 rounded-xl border border-[#E8DED1] bg-[#FAF7F4] p-4">
       <span className="text-xs font-medium text-[#78716C]">{label}</span>
-      <span className="font-semibold text-[#2C241D]">{name || '—'}</span>
-      {contact && <span className="text-xs text-[#9A8775]">{contact}</span>}
+      <span className="font-semibold text-[#2C241D] break-words">{name || '—'}</span>
+      {contact && <span className="text-xs text-[#9A8775] break-words">{contact}</span>}
     </div>
   )
 }

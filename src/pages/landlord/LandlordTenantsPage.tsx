@@ -339,20 +339,6 @@ export default function LandlordTenantsPage() {
     },
   })
 
-  const { mutate: terminateContract, isPending: terminating } = useMutation({
-    mutationFn: () => contractApi.terminateContractWithReason(terminatingContract!.id, terminationReason || 'Chấm dứt bởi chủ trọ'),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['landlord-tenants'] })
-      qc.invalidateQueries({ queryKey: ['landlord-contracts'] })
-      toast.success('Đã chấm dứt hợp đồng.')
-      setTerminatingContract(null)
-      setTerminationReason('')
-    },
-    onError: (err: unknown) => {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể chấm dứt hợp đồng.')
-    },
-  })
-
   const openRentBillingModal = (tenant: TenantInfo) => {
     if (!paymentConfigReady) {
       const msg = 'Bạn cần cấu hình VietQR (ngân hàng, số tài khoản, tên tài khoản) trước khi tạo QR.'
@@ -485,7 +471,7 @@ export default function LandlordTenantsPage() {
 
   return (
     <ManagementLayout role="LANDLORD">
-      <div className="min-h-screen bg-[#FAF6EF] px-6 py-6">
+      <div className="min-h-screen bg-[#FAF6EF] px-0 py-0 sm:px-2 sm:py-2">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
@@ -499,15 +485,15 @@ export default function LandlordTenantsPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link to="/landlord/qr-settings" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 text-sm font-medium text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
+              <Link to="/landlord/qr-settings" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
                 <QrCode size={16} />
                 VietQR
               </Link>
-              <Link to="/landlord/contracts" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 text-sm font-medium text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
+              <Link to="/landlord/contracts" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
                 <FileText size={16} />
                 Hợp đồng
               </Link>
-              <Link to="/landlord/rooms" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#C96A3D] px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#B85C38] hover:text-white">
+              <Link to="/landlord/rooms" className="inline-flex min-h-10 max-w-full flex-wrap items-center justify-center gap-2 rounded-[10px] bg-[#C96A3D] px-4 py-2 text-center text-sm font-medium leading-snug text-white shadow-sm transition-colors hover:bg-[#B85C38] hover:text-white">
                 <Home size={16} />
                 Phòng trọ
               </Link>
@@ -1066,7 +1052,7 @@ export default function LandlordTenantsPage() {
         <div className="space-y-4">
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              Bạn có chắc chắn muốn đuổi <strong>{terminateTenant?.userName}</strong> khỏi phòng trọ không?
+              Bạn có chắc chắn muốn đuổi <strong>{terminateTenant ? getTenantDisplayName(terminateTenant) : 'người thuê'}</strong> khỏi phòng trọ không?
             </p>
             <p className="text-sm text-gray-600 mb-4">
               Hành động này sẽ chấm dứt hợp đồng thuê trọ và người thuê sẽ không thể truy cập vào hệ thống nữa.

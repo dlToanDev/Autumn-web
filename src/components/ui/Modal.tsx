@@ -52,18 +52,18 @@ export default function Modal({ open, onClose, title, description, children, siz
       <div
         className={cn(
           'relative w-full bg-white rounded-[20px] shadow-[0_20px_60px_-10px_rgb(0_0_0/0.20)]',
-          'flex max-h-[92vh] flex-col overflow-hidden',
+          'flex max-h-[92vh] min-w-0 flex-col overflow-hidden',
           sizeMap[size],
         )}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-[#E7E5E4] px-5 py-4 sm:px-6">
+        <div className="flex items-start justify-between gap-3 border-b border-[#E7E5E4] px-4 py-4 sm:gap-4 sm:px-6">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-lg font-semibold text-[#292524] font-display">{title}</h2>
+              <h2 className="text-lg font-semibold text-[#292524] font-display break-words">{title}</h2>
             )}
             {description && (
-              <p className="mt-1 text-sm text-[#78716C]">{description}</p>
+              <p className="mt-1 text-sm text-[#78716C] break-words">{description}</p>
             )}
           </div>
           <button
@@ -75,7 +75,7 @@ export default function Modal({ open, onClose, title, description, children, siz
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">{children}</div>
 
         {/* Footer */}
         {footer && (

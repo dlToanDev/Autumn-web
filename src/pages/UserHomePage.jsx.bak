@@ -1,7 +1,0 @@
-// UserHomePage dang y chi la wrapper route cho role USER.
-// Thay vi tao them mot layout rieng, page nay tai su dung HomePage.
-import HomePage from './HomePage'
-
-export default function UserHomePage() {
-  return <HomePage />
-}

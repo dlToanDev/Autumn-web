@@ -237,14 +237,14 @@ export default function PaymentQrModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[#1C1917]/55 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-[#1C1917]/55 p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
       <div
-        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[24px] border border-white/60 bg-[#FAF6EF] shadow-[0_28px_90px_-28px_rgb(28_25_23/0.65)]"
+        className="flex max-h-[92vh] min-w-0 w-full max-w-6xl flex-col overflow-hidden rounded-[18px] border border-white/60 bg-[#FAF6EF] shadow-[0_28px_90px_-28px_rgb(28_25_23/0.65)] sm:rounded-[24px]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#E8DED1] bg-white px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-[#E8DED1] bg-white px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Badge variant={getPaymentBadgeVariant(payment.status)}>{formatPaymentStatusLabel(payment.status)}</Badge>
@@ -265,14 +265,14 @@ export default function PaymentQrModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           <div className="mb-4 space-y-3">
             <PaymentStatusMessage status={payment.status} isPayer={isPayer} />
             {error && <div className="rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">{error}</div>}
             {proofError && <div className="rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">{proofError}</div>}
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)]">
             <section className="space-y-4">
               <div className="rounded-[22px] border border-[#E8DED1] bg-white p-5 shadow-[0_18px_48px_-32px_rgb(91_70_54/0.45)]">
                 {payment.qrImageUrl ? (
@@ -336,8 +336,8 @@ export default function PaymentQrModal({
               )}
 
               <div className="rounded-[18px] border border-[#E8DED1] bg-white p-5">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="font-display text-base font-semibold text-[#292524]">Ảnh minh chứng chuyển khoản</h3>
                     <p className="mt-1 text-sm text-[#78716C]">Tải ảnh xác nhận giao dịch sau khi chuyển khoản thành công.</p>
                   </div>
@@ -376,7 +376,7 @@ export default function PaymentQrModal({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#E8DED1] bg-white px-6 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#E8DED1] bg-white px-4 py-4 sm:px-6">
           {canRefresh && (
             <Button type="button" onClick={onRefresh} loading={refreshing} leftIcon={<RefreshCw size={16} />}>
               Kiểm tra trạng thái
@@ -388,7 +388,7 @@ export default function PaymentQrModal({
             </Button>
           )}
           {payment.qrImageUrl && (
-            <a href={payment.qrImageUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 text-sm font-medium text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
+            <a href={payment.qrImageUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-[10px] border border-[#E7D8C8] bg-white px-4 py-2 text-center text-sm font-medium leading-snug text-[#5B4636] transition-colors hover:bg-[#FAF6EF] hover:text-[#5B4636]">
               <ExternalLink size={16} />
               Mở ảnh QR
             </a>

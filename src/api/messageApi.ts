@@ -30,8 +30,11 @@ export const messageApi = {
         }))
     },
 
-    getContacts: async (): Promise<User[]> => {
-        const { data } = await apiClient.get('/api/messages/contacts')
+    getContacts: async (keyword?: string): Promise<User[]> => {
+        const normalizedKeyword = keyword?.trim()
+        const { data } = await apiClient.get<User[]>('/api/messages/contacts', {
+            params: normalizedKeyword ? { keyword: normalizedKeyword } : undefined,
+        })
         return data
     },
 
